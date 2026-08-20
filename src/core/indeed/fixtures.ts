@@ -1,10 +1,11 @@
 // Hand-built fixtures modeling Indeed's split-view search page structure, per the
-// selector chains in selectors.ts. These are NOT scraped dumps of a live Indeed page —
-// Indeed's bot protection blocks unauthenticated automated fetches, so no such dump was
-// obtainable — they're constructed from cross-referenced selector names documented by
-// multiple independently-maintained, currently-live tools that target this exact split
-// view (see selectors.ts's header comment for sources). Treat these as "the shape we
-// believe the DOM has," not ground truth — see README's Resilience section.
+// selector chains in selectors.ts. The Tier 1 fixture's structure (container class,
+// title/company/location/description selectors) matches what was confirmed 2026-08-20
+// against a real, live Indeed page via a real browser — see selectors.ts's header comment
+// for exactly what was and wasn't confirmed. Still hand-built, not a literal DOM dump
+// (Indeed's markup carries far more than what's modeled here), so treat this as "the
+// shape we've confirmed holds for the fields we extract," not a full page capture — and
+// expect it to need updating again whenever Indeed next changes something.
 
 export const INDEED_SPLIT_VIEW_TIER1 = `
 <html>
@@ -24,7 +25,7 @@ export const INDEED_SPLIT_VIEW_TIER1 = `
         </li>
       </ul>
     </div>
-    <div class="jobsearch-ViewJobLayout">
+    <div class="jobsearch-RightPane">
       <div class="jobsearch-JobInfoHeader-title-container">
         <h1 class="jobsearch-JobInfoHeader-title">Senior Backend Engineer</h1>
       </div>
@@ -76,7 +77,7 @@ export const INDEED_SPLIT_VIEW_LOADING = `
 <html>
   <body>
     <div id="mosaic-provider-jobcards"></div>
-    <div class="jobsearch-ViewJobLayout">
+    <div class="jobsearch-RightPane">
       <div class="jobsearch-ViewJobSkeleton" data-testid="viewJob-skeleton"></div>
     </div>
   </body>

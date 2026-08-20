@@ -78,7 +78,10 @@ function extractSalary(container: Element): ExtractedPayRange | null {
 }
 
 function matchSalaryText(text: string): string | null {
-  const match = text.match(/\$[\d,]+(?:\.\d+)?(?:\s*(?:-|to|–)\s*\$?[\d,]+(?:\.\d+)?)?\s*(?:a|an|per)?\s*(?:year|hour|month|week|day)?/i);
+  // "an" must be tried before "a" — regex alternation matches left-to-right, and "a" is a
+  // valid prefix-match of "an" (real bug, caught against a live "$50 - $100 an hour"
+  // posting: the old ordering truncated the match to "$50 - $100 a").
+  const match = text.match(/\$[\d,]+(?:\.\d+)?(?:\s*(?:-|to|–)\s*\$?[\d,]+(?:\.\d+)?)?\s*(?:an|a|per)?\s*(?:year|hour|month|week|day)?/i);
   return match ? match[0].trim() : null;
 }
 

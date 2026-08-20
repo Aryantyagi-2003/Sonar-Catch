@@ -4,20 +4,33 @@
 // what happens when every entry in a chain fails (see README's "Resilience" section for
 // the full policy).
 //
-// Sourced from cross-referencing multiple independently-maintained, currently-live
-// projects that target Indeed's split-view search page (not just Indeed's standalone job
-// page), plus class names visible in Indeed's own shipped CSS:
-//   - jobsearch-JobComponent-embeddedBody / jobsearch-ViewJobSkeleton / viewJob-skeleton:
-//     github.com/SirAndrii/chromeExtensionIneed (a maintained extension doing exactly
-//     this kind of split-pane targeting today)
-//   - #mosaic-provider-jobcards, [data-testid="slider_item"|"company-name"|"text-location"]:
-//     documented across multiple current Indeed-scraping guides/tools
-//   - jobsearch-ViewJobLayout: present in Indeed's own production stylesheet
-//   - jobsearch-JobInfoHeader-title / jobsearch-CompanyInfoWithoutHeaderImage: documented
-//     across multiple current Indeed-scraping tools
-// No live authenticated browser session was available to verify these directly against
-// Indeed's current DOM at build time (Indeed's bot protection blocks unauthenticated
-// automated fetches) — this is the best available approximation, not a guarantee.
+// Verified 2026-08-20 against a real, live Indeed split-view search page (real Chrome,
+// real DOM, not a fixture) — https://www.indeed.com/jobs?q=software+engineer&l=remote:
+//   - #mosaic-provider-jobcards + [data-testid="slider_item"]: CONFIRMED live (16 cards).
+//   - .jobsearch-RightPane: CONFIRMED live as the actual detail-pane wrapper class.
+//     .jobsearch-ViewJobLayout, [data-testid="jobsearch-ViewjobPaneWrapper"], and
+//     #viewJobSSRRoot — the selectors originally sourced from cross-referencing other
+//     tools — did NOT match on the real page today. The structural fallback tier (see
+//     extract.ts) caught this correctly and still extracted a fully accurate posting, but
+//     .jobsearch-RightPane is now listed first since it's the one actually confirmed live.
+//   - [data-testid="inlineHeader-companyName"|"inlineHeader-companyLocation"],
+//     .jobsearch-JobInfoHeader-title, #jobDescriptionText: CONFIRMED live, matched real
+//     content correctly.
+//   - .jobsearch-JobComponent-embeddedBody: did NOT match on the real page (Indeed
+//     appears to only use #jobDescriptionText in the split view today) — kept as a
+//     fallback entry in case that changes back, but #jobDescriptionText is listed first.
+//   - DETAIL_SALARY_SELECTORS: did NOT match anything inside the real detail pane (the
+//     "Full-time"-style attribute chips these were meant to target live elsewhere on the
+//     page, not inside .jobsearch-RightPane). The correct salary was recovered entirely
+//     via extract.ts's regex scan of the pane's own text — kept as a first-try, but do
+//     not trust these specific selectors; the regex fallback is what's actually verified
+//     working.
+// Everything above was cross-referenced, before this verification pass, across multiple
+// independently-maintained, currently-live projects that target this same split-view page
+// (github.com/SirAndrii/chromeExtensionIneed for embeddedBody/skeleton/skeleton-testid;
+// various current Indeed-scraping guides for the list/card/company/location selectors),
+// plus class names visible in Indeed's own shipped CSS. Re-verify periodically — a single
+// snapshot in time is not a guarantee it still holds tomorrow.
 
 /** The left-hand scrollable list of job cards — content here must NEVER be attributed to
  *  the currently-open posting. */
@@ -28,6 +41,7 @@ export const LIST_CARD_SELECTOR = '[data-testid="slider_item"]';
 
 /** The right-hand detail pane's outer wrapper. */
 export const DETAIL_PANE_SELECTORS = [
+  ".jobsearch-RightPane",
   ".jobsearch-ViewJobLayout",
   '[data-testid="jobsearch-ViewjobPaneWrapper"]',
   "#viewJobSSRRoot",
@@ -59,11 +73,11 @@ export const DETAIL_SALARY_SELECTORS = [
   ".jobsearch-JobMetadataHeader-item",
 ];
 
-/** The actual description body, split-view specific first, standalone-page id as a
- *  fallback (Indeed reuses this id on the non-split /viewjob page). */
+/** The actual description body. #jobDescriptionText is confirmed live in the split view
+ *  today; the others are kept as fallbacks in case Indeed reintroduces them. */
 export const DETAIL_DESCRIPTION_SELECTORS = [
-  ".jobsearch-JobComponent-embeddedBody",
   "#jobDescriptionText",
+  ".jobsearch-JobComponent-embeddedBody",
   ".jobsearch-JobComponent-description",
 ];
 

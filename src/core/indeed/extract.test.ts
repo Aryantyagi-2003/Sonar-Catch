@@ -51,6 +51,34 @@ describe("extractIndeedJobPosting — Tier 1 (semantic selectors)", () => {
   });
 });
 
+describe("extractIndeedJobPosting — salary regex regression", () => {
+  // Caught via a real end-to-end run against a live Indeed posting on 2026-08-20: the
+  // "a|an|per" alternation matched "a" before trying "an" (a valid prefix of "an"),
+  // truncating "$50 - $100 an hour" down to "$50 - $100 a". "an" must be tried first.
+  it("doesn't truncate 'an hour' down to 'a'", () => {
+    const html = `
+      <html><body>
+        <div id="mosaic-provider-jobcards"></div>
+        <div class="jobsearch-RightPane">
+          <h1 class="jobsearch-JobInfoHeader-title">Staff Software Engineer</h1>
+          <div id="jobDescriptionText">
+            This is a fully remote contracting role with flexible scheduling and a
+            supportive team. Pay range for this role is $50 - $100 an hour depending on
+            experience level, paid out twice a month via direct deposit.
+          </div>
+        </div>
+      </body></html>
+    `;
+    const result = extractIndeedJobPosting(parse(html), "https://www.indeed.com/jobs");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.salary?.raw).not.toBe("$50 - $100 a");
+    expect(result.posting.salary?.raw?.toLowerCase()).toContain("hour");
+    expect(result.posting.salary?.min).toBe(50);
+    expect(result.posting.salary?.max).toBe(100);
+  });
+});
+
 describe("extractIndeedJobPosting — Tier 2 (structural fallback)", () => {
   const doc = parse(INDEED_SPLIT_VIEW_STRUCTURAL_FALLBACK);
   const result = extractIndeedJobPosting(doc, "https://www.indeed.com/viewjob?jk=xyz");

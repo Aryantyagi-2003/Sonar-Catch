@@ -39,13 +39,18 @@ confirm step keeps a human in the loop, cheaply.
 ## Detection strategy — and its limits
 
 Indeed's DOM is not a public API. Class names and `data-testid` attributes are
-implementation details that change without notice, and there was no way to verify them
-against a live, authenticated Indeed session while building this (Indeed's bot protection
-blocks unauthenticated automated fetches). The selectors in
+implementation details that change without notice. The selectors in
 [`src/core/indeed/selectors.ts`](src/core/indeed/selectors.ts) were cross-referenced
 across multiple independently-maintained, currently-live tools that target this same
-split-view page, plus class names visible in Indeed's own shipped CSS — but that is *best
-available approximation*, not a guarantee.
+split-view page, plus class names visible in Indeed's own shipped CSS, then **verified
+2026-08-20 against a real, live Indeed search page in a real browser** (see that file's
+header comment for exactly what was and wasn't confirmed). One selector guess
+(`.jobsearch-ViewJobLayout` for the detail-pane wrapper) turned out to be stale on the
+real page — the actual class is `.jobsearch-RightPane` — and has been corrected. That
+same live run is also what the structural-fallback tier below was actually observed
+falling into and recovering from, not just unit-tested in the abstract.
+
+This is still a snapshot in time, not a permanent guarantee — see below.
 
 **This extension will break when Indeed changes their markup.** That is a known,
 permanent limitation of depending on an unofficial page structure instead of a real API —
@@ -99,10 +104,42 @@ Unit tests in `src/core/indeed/extract.test.ts` run the extraction logic against
 hand-built HTML fixtures (`fixtures.ts`) modeling both a clean semantic-selector match and
 a structural-fallback scenario — including an explicit assertion that left-pane job card
 content (titles, companies, snippets from *other* postings) never appears anywhere in the
-extracted result. These fixtures are constructed from the selector research above, not
-scraped from a live page (see **Detection strategy**) — treat them as "the shape we
-believe the DOM has," and expect to need to update them (and the selectors) when Indeed
+extracted result. The Tier 1 fixture's structure matches what was confirmed live (see
+**Detection strategy** and **Real-world verification**) — still hand-built, not a literal
+DOM dump, so expect to need to update it (and the selectors) again when Indeed next
 changes something.
+
+## Real-world verification
+
+On 2026-08-20 the core extraction and ingestion path was run end-to-end against the real
+things it talks to, not just unit tests:
+
+- A real Chrome instance navigated to a live `indeed.com` search results page.
+- The exact extraction algorithm in `extract.ts` (container detection, tiered fallback,
+  field selectors, salary parsing) ran against that live DOM — not a fixture.
+- Clicking through 3 different real job cards produced 3 distinct, correctly-updated
+  extractions, each matching *its own* card's title and company exactly (verified by
+  direct correspondence, not fuzzy matching).
+- One real posting's extracted text was sent through the real flow — `POST /api/ingest`
+  with a real `sonar_pat_` token → real Gemini classification → `POST
+  /api/ingest/confirm` → a real `Application` row, verified directly in Sonar's database
+  with the correct company, role, industry, pay range, skills, and fit rationale.
+- This surfaced two real bugs, both fixed and covered by regression tests: a stale
+  detail-pane selector (see above) and a salary-regex ordering bug that truncated "$50 -
+  $100 an hour" down to "$50 - $100 a" (`(?:a|an|per)` tried the substring "a" before
+  "an", cutting the match short — fixed by reordering to `(?:an|a|per)`).
+
+**What this did *not* cover**, and is a genuine, disclosed gap rather than a claimed pass:
+loading this exact `dist/` build into Chrome via the normal "Load unpacked" flow and
+driving the actual injected widget/click/toolbar-icon UI through the real extension
+mechanism. Two real obstacles: this Chrome build rejected the `--load-extension`
+command-line flag outright, and "Load unpacked"'s folder picker is a native OS dialog that
+browser automation tooling cannot click through (by design — that boundary exists on
+purpose). The extraction logic itself was verified for real by running it directly against
+the live page instead; what remains unverified is purely the mechanical
+load-the-extension-and-click-the-widget path, which takes one person about 30 seconds to
+confirm manually (see **Installing the extension** below) and does not depend on anything
+this testing pass couldn't already exercise.
 
 ## Sonar-side setup: API tokens
 
