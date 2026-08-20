@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sonar Catch Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Sonar Catch</h1>
+      <p class="subtitle">Configure where extracted postings get sent.</p>
+
+      <form id="settings-form">
+        <label>
+          <span>Sonar instance URL</span>
+          <input type="url" id="sonarUrl" placeholder="https://sonar.example.com" required />
+          <span class="hint">e.g. http://localhost:3000 during development</span>
+        </label>
+
+        <label>
+          <span>API token</span>
+          <input type="password" id="apiToken" placeholder="sonar_pat_..." required />
+          <span class="hint">Generate one from Sonar's Settings → API Tokens page</span>
+        </label>
+
+        <button type="submit">Save</button>
+        <span id="status" role="status"></span>
+      </form>
+    </main>
+    <script type="module" src="options.ts"></script>
+  </body>
+</html>

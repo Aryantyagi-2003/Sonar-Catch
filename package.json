@@ -1,0 +1,25 @@
+{
+  "name": "sonar-catch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser extension companion to Sonar: detects the job posting open in Indeed's detail pane and sends it to Sonar's ingestion API.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.7.1",
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.20.1",
+    "eslint": "^9.15.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.67.0",
+    "vite": "^6.0.3",
+    "vitest": "^4.1.11"
+  }
+}
