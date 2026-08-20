@@ -1,4 +1,6 @@
-import { getSonarSettings, setSonarSettings } from "@/adapters/chrome/storage";
+import browser from "webextension-polyfill";
+
+import { getSonarSettings, setSonarSettings } from "@/adapters/webextension/storage";
 
 const form = document.getElementById("settings-form") as HTMLFormElement;
 const sonarUrlInput = document.getElementById("sonarUrl") as HTMLInputElement;
@@ -32,7 +34,7 @@ form.addEventListener("submit", async (event) => {
   // is user-configured (localhost in dev, a real deployment later), so its origin is
   // requested at runtime rather than declared upfront. This keeps the extension's
   // install-time permission prompt narrow instead of asking for blanket network access.
-  const granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
+  const granted = await browser.permissions.request({ origins: [`${origin}/*`] });
   if (!granted) {
     status.textContent = "Sonar Catch needs permission to reach that URL to send postings — try again and allow it.";
     status.className = "error";

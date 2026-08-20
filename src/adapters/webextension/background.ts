@@ -1,6 +1,8 @@
+import browser from "webextension-polyfill";
+
 import { submitJobPosting, confirmJobPosting } from "@/core/sonar-client";
 import { composePostingText } from "@/core/compose-posting-text";
-import { getSonarSettings } from "@/adapters/chrome/storage";
+import { getSonarSettings } from "@/adapters/webextension/storage";
 import type { ExtractedJobPosting } from "@/core/types";
 
 type SendPostingMessage = { type: "SEND_POSTING"; posting: ExtractedJobPosting };
@@ -29,13 +31,16 @@ async function handleSendPosting(posting: ExtractedJobPosting): Promise<SendPost
   return { ok: true, applicationId: confirmResult.applicationId };
 }
 
-chrome.runtime.onMessage.addListener((message: SendPostingMessage, _sender, sendResponse) => {
-  if (message?.type !== "SEND_POSTING") return false;
-
-  handleSendPosting(message.posting).then(sendResponse);
-  return true; // keep the message channel open for the async sendResponse above
+// The polyfill's onMessage supports returning a Promise directly from the listener as the
+// portable way to send an async response — this works natively in Firefox and is what the
+// polyfill normalizes Chrome's sendResponse+"return true" callback pattern into, so the
+// same listener body runs unmodified on both.
+browser.runtime.onMessage.addListener((message: unknown) => {
+  const msg = message as SendPostingMessage;
+  if (msg?.type !== "SEND_POSTING") return undefined;
+  return handleSendPosting(msg.posting);
 });
 
-chrome.action.onClicked.addListener(() => {
-  chrome.runtime.openOptionsPage();
+browser.action.onClicked.addListener(() => {
+  browser.runtime.openOptionsPage();
 });

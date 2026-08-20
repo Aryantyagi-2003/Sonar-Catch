@@ -1,7 +1,9 @@
+import browser from "webextension-polyfill";
+
 import { extractIndeedJobPosting } from "@/core/indeed/extract";
 import { DETAIL_PANE_SELECTORS, SKELETON_CLASS, SKELETON_TEST_ID } from "@/core/indeed/selectors";
 import type { ExtractedJobPosting } from "@/core/types";
-import { renderWidget, setSendHandler, type WidgetState } from "@/adapters/chrome/ui";
+import { renderWidget, setSendHandler, type WidgetState } from "@/adapters/webextension/ui";
 // ui.css is injected via manifest.json's content_scripts.css, not imported here — that's
 // the standard MV3 mechanism and avoids CSP issues with injecting <style> via JS.
 
@@ -87,29 +89,35 @@ function observe(): void {
   }, 5000);
 }
 
-function handleSendClick(): void {
+async function handleSendClick(): Promise<void> {
   if (!currentPosting) return;
   renderWidget({ kind: "sending" });
 
-  chrome.runtime.sendMessage(
-    { type: "SEND_POSTING", posting: currentPosting },
-    (response: { ok: true; applicationId: string } | { ok: false; error: string }) => {
-      if (chrome.runtime.lastError || !response) {
-        renderWidget({ kind: "error", message: "Couldn't reach the extension background — try again." });
-        return;
-      }
-      const state: WidgetState = response.ok
-        ? { kind: "sent", applicationId: response.applicationId }
-        : { kind: "error", message: response.error };
-      renderWidget(state);
+  let response: { ok: true; applicationId: string } | { ok: false; error: string } | undefined;
+  try {
+    response = (await browser.runtime.sendMessage({ type: "SEND_POSTING", posting: currentPosting })) as
+      | { ok: true; applicationId: string }
+      | { ok: false; error: string }
+      | undefined;
+  } catch {
+    response = undefined;
+  }
 
-      // Return to the normal "detected" state after a moment so the widget is ready for
-      // the next posting the user clicks to, rather than getting stuck on a stale toast.
-      setTimeout(() => {
-        if (currentPosting) renderWidget({ kind: "detected", posting: currentPosting });
-      }, 2500);
-    },
-  );
+  if (!response) {
+    renderWidget({ kind: "error", message: "Couldn't reach the extension background — try again." });
+    return;
+  }
+
+  const state: WidgetState = response.ok
+    ? { kind: "sent", applicationId: response.applicationId }
+    : { kind: "error", message: response.error };
+  renderWidget(state);
+
+  // Return to the normal "detected" state after a moment so the widget is ready for the
+  // next posting the user clicks to, rather than getting stuck on a stale toast.
+  setTimeout(() => {
+    if (currentPosting) renderWidget({ kind: "detected", posting: currentPosting });
+  }, 2500);
 }
 
 setSendHandler(handleSendClick);
