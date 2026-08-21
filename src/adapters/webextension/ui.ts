@@ -26,12 +26,22 @@ function ensureWidget(): HTMLElement {
   return widget;
 }
 
+// Builds every state's contents as real DOM nodes (createElement + textContent) rather
+// than HTML strings — not just to avoid escaping mistakes, but because static analyzers
+// (notably AMO's, which submitting to Mozilla runs) flag any dynamic innerHTML assignment
+// on sight, escaped or not, since they can't verify escaping was actually applied.
+function textSpan(text: string): HTMLSpanElement {
+  const span = document.createElement("span");
+  span.textContent = text;
+  return span;
+}
+
 export function renderWidget(state: WidgetState): void {
   const widget = ensureWidget();
 
   if (state.kind === "hidden") {
     widget.style.display = "none";
-    widget.innerHTML = "";
+    widget.replaceChildren();
     return;
   }
 
@@ -40,16 +50,24 @@ export function renderWidget(state: WidgetState): void {
   switch (state.kind) {
     case "not-found":
       widget.className = "sonar-catch-widget sonar-catch-widget--muted";
-      widget.innerHTML = `<span>Sonar Catch: couldn't detect a job posting here</span>`;
+      widget.replaceChildren(textSpan("Sonar Catch: couldn't detect a job posting here"));
       break;
 
-    case "detected":
+    case "detected": {
       widget.className = "sonar-catch-widget sonar-catch-widget--ready sonar-catch-widget--pulse";
-      widget.innerHTML = `
-        <button type="button" id="sonar-catch-send-button">Send to Sonar</button>
-        <span class="sonar-catch-widget__title" title="${escapeHtml(state.posting.title)}">${escapeHtml(truncate(state.posting.title, 40))}</span>
-      `;
-      widget.querySelector("#sonar-catch-send-button")?.addEventListener("click", () => onSendClick?.());
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.id = "sonar-catch-send-button";
+      button.textContent = "Send to Sonar";
+      button.addEventListener("click", () => onSendClick?.());
+
+      const title = document.createElement("span");
+      title.className = "sonar-catch-widget__title";
+      title.title = state.posting.title;
+      title.textContent = truncate(state.posting.title, 40);
+
+      widget.replaceChildren(button, title);
       // Restart the pulse animation on every render so a newly-detected posting always
       // visibly flashes, even if the previous state was also "detected" (guards against
       // rapid clicking landing on two different postings whose UI would otherwise look
@@ -60,30 +78,25 @@ export function renderWidget(state: WidgetState): void {
         widget.classList.add("sonar-catch-widget--pulse");
       });
       break;
+    }
 
     case "sending":
       widget.className = "sonar-catch-widget sonar-catch-widget--busy";
-      widget.innerHTML = `<span>Sending to Sonar…</span>`;
+      widget.replaceChildren(textSpan("Sending to Sonar…"));
       break;
 
     case "sent":
       widget.className = "sonar-catch-widget sonar-catch-widget--success";
-      widget.innerHTML = `<span>Saved to Sonar ✓</span>`;
+      widget.replaceChildren(textSpan("Saved to Sonar ✓"));
       break;
 
     case "error":
       widget.className = "sonar-catch-widget sonar-catch-widget--error";
-      widget.innerHTML = `<span>${escapeHtml(state.message)}</span>`;
+      widget.replaceChildren(textSpan(state.message));
       break;
   }
 }
 
 function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
 }
