@@ -79,7 +79,7 @@ await writeFile(path.join(outDir, "manifest.json"), JSON.stringify(firefoxManife
 
 // --- static assets ---
 await mkdir(path.join(outDir, "icons"), { recursive: true });
-for (const size of [16, 48, 128]) {
+for (const size of [16, 32, 48, 128]) {
   await copyFile(resolve(`icons/icon${size}.png`), path.join(outDir, "icons", `icon${size}.png`));
 }
 await copyFile(resolve("src/adapters/webextension/ui.css"), path.join(outDir, "ui.css"));

@@ -286,6 +286,15 @@ npm run build:firefox   # -> dist-firefox/
   adversarial/prompt-injection input when pasted manually — this extension introduces no
   new trust boundary, it just automates getting text to an existing one.
 
+## Icon
+
+`icons/icon.svg` is the source; `icons/icon{16,32,48,128}.png` are rasterized from it and
+referenced by both manifests. The mark is four corner brackets closing on a solid center
+dot — a small nod to Sonar's own indigo accent (`#4438DB`) and to what the extension
+actually does: isolate one job posting from the page around it. Regenerate the PNGs with
+`sharp` (or any SVG rasterizer) if the source ever changes; there's no build-time step for
+this, since the icon changes far less often than the code does.
+
 ## Scope
 
 Indeed only, deliberately. Each job board has a genuinely different DOM shape, and a
