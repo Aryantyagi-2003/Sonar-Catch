@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sonar Catch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Detects the job posting open in Indeed's detail pane and sends it to Sonar's ingestion API.",
   "icons": {
     "16": "icons/icon16.png",
