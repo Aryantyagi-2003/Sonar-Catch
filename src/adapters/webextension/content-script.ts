@@ -3,6 +3,7 @@ import browser from "webextension-polyfill";
 import { extractIndeedJobPosting } from "@/core/indeed/extract";
 import { DETAIL_PANE_SELECTORS, SKELETON_CLASS, SKELETON_TEST_ID } from "@/core/indeed/selectors";
 import type { ExtractedJobPosting } from "@/core/types";
+import type { ExistingApplicationMatch } from "@/core/sonar-client";
 import { renderWidget, setSendHandler, type WidgetState } from "@/adapters/webextension/ui";
 // ui.css is injected via manifest.json's content_scripts.css, not imported here — that's
 // the standard MV3 mechanism and avoids CSP issues with injecting <style> via JS.
@@ -11,6 +12,10 @@ const DEBOUNCE_MS = 400;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let currentPosting: ExtractedJobPosting | null = null;
+// Captured when the posting is first detected, not when the user later clicks "Send to
+// Sonar" — a batch of applications sent back-to-back would otherwise all get the send-time
+// timestamp of whichever moment the user got around to clicking, not when each was found.
+let currentPostingDetectedAt: string | null = null;
 
 function findObserveTarget(): Node {
   for (const selector of DETAIL_PANE_SELECTORS) {
@@ -43,8 +48,8 @@ function runExtraction(): void {
     currentPosting.descriptionText !== result.posting.descriptionText;
 
   currentPosting = result.posting;
-
   if (changed) {
+    currentPostingDetectedAt = new Date().toISOString();
     renderWidget({ kind: "detected", posting: result.posting });
   }
 }
@@ -93,12 +98,23 @@ async function handleSendClick(): Promise<void> {
   if (!currentPosting) return;
   renderWidget({ kind: "sending" });
 
-  let response: { ok: true; applicationId: string } | { ok: false; error: string } | undefined;
+  // Falls back to "now" only if a posting was somehow sent without ever going through
+  // runExtraction's changed-detection branch — shouldn't happen since currentPosting is
+  // only ever set there, but keeps this from sending an empty dateApplied.
+  const dateApplied = currentPostingDetectedAt ?? new Date().toISOString();
+
+  type SendPostingResponse =
+    | { ok: true; applicationId: string }
+    | { ok: false; error: string }
+    | { ok: false; duplicate: true; match: ExistingApplicationMatch; existingUrl: string };
+
+  let response: SendPostingResponse | undefined;
   try {
-    response = (await browser.runtime.sendMessage({ type: "SEND_POSTING", posting: currentPosting })) as
-      | { ok: true; applicationId: string }
-      | { ok: false; error: string }
-      | undefined;
+    response = (await browser.runtime.sendMessage({
+      type: "SEND_POSTING",
+      posting: currentPosting,
+      dateApplied,
+    })) as SendPostingResponse | undefined;
   } catch {
     response = undefined;
   }
@@ -110,7 +126,9 @@ async function handleSendClick(): Promise<void> {
 
   const state: WidgetState = response.ok
     ? { kind: "sent", applicationId: response.applicationId }
-    : { kind: "error", message: response.error };
+    : "duplicate" in response
+      ? { kind: "already-logged", match: response.match, existingUrl: response.existingUrl }
+      : { kind: "error", message: response.error };
   renderWidget(state);
 
   // Return to the normal "detected" state after a moment so the widget is ready for the

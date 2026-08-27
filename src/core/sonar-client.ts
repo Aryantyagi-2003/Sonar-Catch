@@ -21,6 +21,18 @@ export type ConfirmResult =
   | { ok: true; applicationId: string }
   | { ok: false; status: number; error: string };
 
+export interface ExistingApplicationMatch {
+  id: string;
+  company: string;
+  role: string;
+  stage: string;
+  dateApplied: string;
+}
+
+export type LookupResult =
+  | { ok: true; match: ExistingApplicationMatch | null }
+  | { ok: false; status: number; error: string };
+
 function normalizeBaseUrl(sonarUrl: string): string {
   return sonarUrl.replace(/\/+$/, "");
 }
@@ -56,10 +68,39 @@ export async function submitJobPosting(
   }
 }
 
+export async function lookupExistingApplication(
+  sonarUrl: string,
+  apiToken: string,
+  payload: { company: string; role: string; sourceUrl: string | null },
+  fetchImpl: typeof fetch = fetch,
+): Promise<LookupResult> {
+  try {
+    const response = await fetchImpl(`${normalizeBaseUrl(sonarUrl)}/api/ingest/lookup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      return { ok: false, status: response.status, error: body?.error ?? `Request failed (${response.status}).` };
+    }
+
+    return { ok: true, match: body?.match ?? null };
+  } catch {
+    return { ok: false, status: 0, error: "Couldn't reach Sonar — check the instance URL and your connection." };
+  }
+}
+
 export async function confirmJobPosting(
   sonarUrl: string,
   apiToken: string,
   pendingToken: string,
+  dateApplied: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ConfirmResult> {
   try {
@@ -69,7 +110,7 @@ export async function confirmJobPosting(
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiToken}`,
       },
-      body: JSON.stringify({ pendingToken }),
+      body: JSON.stringify({ pendingToken, dateApplied }),
     });
 
     const body = await response.json().catch(() => null);

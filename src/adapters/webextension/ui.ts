@@ -1,4 +1,5 @@
 import type { ExtractedJobPosting } from "@/core/types";
+import type { ExistingApplicationMatch } from "@/core/sonar-client";
 
 const WIDGET_ID = "sonar-catch-widget";
 
@@ -7,6 +8,7 @@ export type WidgetState =
   | { kind: "detected"; posting: ExtractedJobPosting }
   | { kind: "sending" }
   | { kind: "sent"; applicationId: string }
+  | { kind: "already-logged"; match: ExistingApplicationMatch; existingUrl: string }
   | { kind: "error"; message: string }
   | { kind: "not-found" };
 
@@ -89,6 +91,21 @@ export function renderWidget(state: WidgetState): void {
       widget.className = "sonar-catch-widget sonar-catch-widget--success";
       widget.replaceChildren(textSpan("Saved to Sonar ✓"));
       break;
+
+    case "already-logged": {
+      widget.className = "sonar-catch-widget sonar-catch-widget--muted";
+
+      const label = textSpan(`Already logged (${state.match.stage.toLowerCase()}) — `);
+
+      const link = document.createElement("a");
+      link.href = state.existingUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "view in Sonar";
+
+      widget.replaceChildren(label, link);
+      break;
+    }
 
     case "error":
       widget.className = "sonar-catch-widget sonar-catch-widget--error";
