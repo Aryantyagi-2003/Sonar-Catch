@@ -1,6 +1,6 @@
 {
   "name": "sonar-catch",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Browser extension companion to Sonar: detects the job posting open in Indeed's detail pane and sends it to Sonar's ingestion API.",
   "type": "module",
