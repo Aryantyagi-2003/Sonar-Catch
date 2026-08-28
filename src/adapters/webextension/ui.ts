@@ -6,6 +6,7 @@ const WIDGET_ID = "sonar-catch-widget";
 export type WidgetState =
   | { kind: "hidden" }
   | { kind: "detected"; posting: ExtractedJobPosting }
+  | { kind: "detected-low-confidence"; posting: ExtractedJobPosting }
   | { kind: "sending" }
   | { kind: "sent"; applicationId: string }
   | { kind: "already-logged"; match: ExistingApplicationMatch; existingUrl: string }
@@ -55,8 +56,12 @@ export function renderWidget(state: WidgetState): void {
       widget.replaceChildren(textSpan("Sonar Catch: couldn't detect a job posting here"));
       break;
 
-    case "detected": {
-      widget.className = "sonar-catch-widget sonar-catch-widget--ready sonar-catch-widget--pulse";
+    case "detected":
+    case "detected-low-confidence": {
+      const lowConfidence = state.kind === "detected-low-confidence";
+      widget.className = lowConfidence
+        ? "sonar-catch-widget sonar-catch-widget--review sonar-catch-widget--pulse"
+        : "sonar-catch-widget sonar-catch-widget--ready sonar-catch-widget--pulse";
 
       const button = document.createElement("button");
       button.type = "button";
@@ -69,7 +74,16 @@ export function renderWidget(state: WidgetState): void {
       title.title = state.posting.title;
       title.textContent = truncate(state.posting.title, 40);
 
-      widget.replaceChildren(button, title);
+      if (lowConfidence) {
+        // A generic-fallback extraction is a real step down in reliability — say so, and
+        // stack the note above the button so it can't be missed on the way to clicking.
+        const note = document.createElement("span");
+        note.className = "sonar-catch-widget__note";
+        note.textContent = "Detected via fallback — review before sending";
+        widget.replaceChildren(note, button, title);
+      } else {
+        widget.replaceChildren(button, title);
+      }
       // Restart the pulse animation on every render so a newly-detected posting always
       // visibly flashes, even if the previous state was also "detected" (guards against
       // rapid clicking landing on two different postings whose UI would otherwise look

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Sonar Catch",
-  "version": "0.1.3",
-  "description": "Detects the job posting open in Indeed's detail pane and sends it to Sonar's ingestion API.",
+  "version": "0.1.4",
+  "description": "Detects the job posting open on Indeed and on select company career sites (RBC, Walmart, Best Buy Canada, CIBC) and sends it to Sonar's ingestion API.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -25,13 +25,27 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.indeed.com/*", "https://*.indeed.com/*"],
+      "matches": [
+        "https://www.indeed.com/*",
+        "https://*.indeed.com/*",
+        "https://jobs.rbc.com/*",
+        "https://careers.walmart.com/*",
+        "https://bestbuycanada.wd3.myworkdayjobs.com/*",
+        "https://cibc.wd3.myworkdayjobs.com/*"
+      ],
       "js": ["src/adapters/webextension/content-script.ts"],
       "css": ["src/adapters/webextension/ui.css"],
       "run_at": "document_idle"
     }
   ],
-  "host_permissions": ["https://www.indeed.com/*", "https://*.indeed.com/*"],
+  "host_permissions": [
+    "https://www.indeed.com/*",
+    "https://*.indeed.com/*",
+    "https://jobs.rbc.com/*",
+    "https://careers.walmart.com/*",
+    "https://bestbuycanada.wd3.myworkdayjobs.com/*",
+    "https://cibc.wd3.myworkdayjobs.com/*"
+  ],
   "permissions": ["storage"],
   "optional_host_permissions": ["http://*/*", "https://*/*"]
 }

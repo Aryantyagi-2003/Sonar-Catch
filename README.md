@@ -19,7 +19,10 @@ with its own build, its own permissions model, and its own release cadence.
 
 ## How it works
 
-1. A content script runs only on `indeed.com` job search pages.
+*(This section describes the Indeed path. See **Non-Indeed career sites** below for the
+additive per-company adapters that reuse everything from step 3 onward.)*
+
+1. A content script runs on `indeed.com` job search pages.
 2. It locates the right-hand detail pane (see **Detection strategy** below), watches it
    with a debounced `MutationObserver`, and re-extracts whenever the pane's content
    changes — i.e. whenever you click a different job card.
@@ -295,8 +298,81 @@ actually does: isolate one job posting from the page around it. Regenerate the P
 `sharp` (or any SVG rasterizer) if the source ever changes; there's no build-time step for
 this, since the icon changes far less often than the code does.
 
+## Non-Indeed career sites
+
+Indeed's detection above is unchanged and stands on its own. Layered on top of it — purely
+additively, sharing the same widget and the same send/lookup/duplicate flow — is a small
+set of **named, per-company adapters** for other career sites:
+
+| Company | Host | ATS platform |
+|---|---|---|
+| RBC | `jobs.rbc.com` | Phenom |
+| Walmart (US) | `careers.walmart.com` | Phenom (headless / Next.js front end) |
+| Best Buy Canada | `bestbuycanada.wd3.myworkdayjobs.com` | Workday |
+| CIBC | `cibc.wd3.myworkdayjobs.com` | Workday |
+
+Two adapters share a Phenom extractor and two share a Workday one, but each is registered
+by name (`src/core/sites/registry.ts`) so a detection problem attributes to a specific
+company, not to "something Workday-ish". `host_permissions` / `content_scripts.matches`
+name these four hosts explicitly — no `<all_urls>`, so the install prompt stays honest.
+
+### Detect-and-alert, not silent adapters
+
+The design goal is: try hard on these sites, and **be honest when confidence is low**
+rather than either silently guessing wrong or silently doing nothing. Every adapter runs
+the same three tiers:
+
+1. **JSON-LD** (`<script type="application/ld+json">` `JobPosting`) — the primary tier.
+   It's what the site publishes for Google for Jobs, so it's server-rendered and far more
+   stable than internal CSS classes. Verified live 2026-08-28 to be present on RBC, CIBC,
+   and Best Buy Canada job pages. → reported as a confident **"detected"**.
+2. **Platform DOM selectors** — Workday `data-automation-id`, Phenom `data-ph-at-id`.
+   Only present after the SPA renders. Used when JSON-LD is missing. → confident
+   **"detected"**.
+3. **Generic structural fallback** — largest coherent job-shaped text block on the page.
+   Reached only when tiers 1–2 both miss, i.e. the site's structure has drifted since the
+   adapter was written. The widget switches to a distinct amber **"Detected via fallback —
+   review before sending"** state, and the extracted posting carries
+   `detection.confidence: "low"` through the rest of the pipeline. Sending is still
+   allowed (Sonar's own confirm step keeps a human in the loop), just clearly flagged.
+
+If all three tiers fail, the widget says **"couldn't detect a job posting here"** and
+nothing is sent.
+
+### Adapter health
+
+The content script records the outcome of every run to `browser.storage.local`, and the
+options page shows one row per adapter: **Dedicated adapter** (tier 1–2),
+**Falling back to generic** (tier 3), **Detection failed**, or **Not seen yet** — so it's
+visible at a glance which companies' pages may need re-investigating, rather than finding
+out mid-application.
+
+### Verified vs. not
+
+- **RBC, CIBC, Best Buy Canada** — tier-1 JSON-LD extraction run against real, live job
+  pages (raw HTML fetched 2026-08-28) through the actual adapter code: correct title,
+  company, location, description, and pay range on all three.
+- **Walmart (US)** — `careers.walmart.com` was confirmed to be a Next.js/AEM front end
+  (not the classic Phenom Angular one). Its job-detail pages render client-side and a live
+  job URL couldn't be obtained without executing their JS, so its adapter is **unverified**
+  — it's expected to work via tier-1 JSON-LD, with the generic tier as backstop, but that
+  needs a real-browser pass to confirm.
+- Tiers 2–3 (rendered-DOM selectors, structural fallback) are covered by unit tests
+  against realistic fixtures; confirming them on the live sites needs a real browser, the
+  same disclosed constraint as loading the extension into Chrome via automation (above).
+
+### Not built: self-healing
+
+The extension does **not** re-derive its own selectors when a site changes (e.g. via an
+LLM call). That would trade the honest "this looks low-confidence, review it" signal for a
+silent guess. If a dedicated adapter starts falling back, that's a prompt to re-investigate
+the site by hand. Automatic self-repair is a possible future direction, not a current
+feature.
+
 ## Scope
 
-Indeed only, deliberately. Each job board has a genuinely different DOM shape, and a
-"generic extraction" layer across all of them would be a much bigger, mushier problem than
-this. A working Indeed-only extension beats a half-working universal one.
+Indeed is the core, and its detection is deliberately frozen. The non-Indeed adapters
+above are intentionally a short, explicit list rather than a "works on any career site"
+promise — each ATS platform has a genuinely different DOM shape, and the honest
+detect-and-alert behaviour is only meaningful when it's backed by real per-site
+investigation.

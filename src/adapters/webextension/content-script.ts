@@ -5,8 +5,17 @@ import { DETAIL_PANE_SELECTORS, SKELETON_CLASS, SKELETON_TEST_ID } from "@/core/
 import type { ExtractedJobPosting } from "@/core/types";
 import type { ExistingApplicationMatch } from "@/core/sonar-client";
 import { renderWidget, setSendHandler, type WidgetState } from "@/adapters/webextension/ui";
+import { startSiteAdapters } from "@/adapters/webextension/sites-content";
 // ui.css is injected via manifest.json's content_scripts.css, not imported here — that's
 // the standard MV3 mechanism and avoids CSP issues with injecting <style> via JS.
+
+/** Indeed's detection (everything above this line, plus src/core/indeed/) is unchanged and
+ *  runs only on Indeed. Every other matched host is handled by the site-adapter layer
+ *  (src/core/sites/), which shares this file's widget and background messaging but nothing
+ *  of the Indeed-specific skeleton/split-view logic. */
+function isIndeedHost(hostname: string): boolean {
+  return hostname === "indeed.com" || hostname === "www.indeed.com" || hostname.endsWith(".indeed.com");
+}
 
 const DEBOUNCE_MS = 400;
 
@@ -138,6 +147,10 @@ async function handleSendClick(): Promise<void> {
   }, 2500);
 }
 
-setSendHandler(handleSendClick);
-observe();
-scheduleExtraction(true);
+if (isIndeedHost(window.location.hostname)) {
+  setSendHandler(handleSendClick);
+  observe();
+  scheduleExtraction(true);
+} else {
+  void startSiteAdapters();
+}
