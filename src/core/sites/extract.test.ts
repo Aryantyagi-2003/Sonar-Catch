@@ -8,6 +8,10 @@ import {
   WORKDAY_BROKEN,
   PHENOM_JSONLD,
   PHENOM_DOM_ONLY,
+  LINKEDIN_JSONLD,
+  LINKEDIN_DOM_ONLY,
+  LINKEDIN_GUEST_DOM_ONLY,
+  LINKEDIN_BROKEN,
   NOT_A_JOB_PAGE,
 } from "@/core/sites/fixtures";
 
@@ -20,6 +24,8 @@ const BESTBUY_URL =
   "https://bestbuycanada.wd3.myworkdayjobs.com/en-US/BestBuyCA_Career/job/11936-London/Merchandiser_R-52702";
 const RBC_URL = "https://jobs.rbc.com/ca/en/job/RBCAA0088R0000167419EXTERNALENCA/Senior-ServiceNow-Engineer";
 const WALMART_URL = "https://careers.walmart.com/us/jobs/0000-senior-manager";
+const LINKEDIN_URL = "https://www.linkedin.com/jobs/view/4419969671/";
+const LINKEDIN_SEARCH_URL = "https://www.linkedin.com/jobs/search/?currentJobId=4419969671";
 
 describe("adapterFor — host routing", () => {
   it("routes each target host to its own named adapter", () => {
@@ -27,6 +33,8 @@ describe("adapterFor — host routing", () => {
     expect(adapterFor(new URL(WALMART_URL))?.id).toBe("walmart");
     expect(adapterFor(new URL(BESTBUY_URL))?.id).toBe("bestbuy-ca");
     expect(adapterFor(new URL(CIBC_URL))?.id).toBe("cibc");
+    expect(adapterFor(new URL(LINKEDIN_URL))?.id).toBe("linkedin");
+    expect(adapterFor(new URL(LINKEDIN_SEARCH_URL))?.id).toBe("linkedin");
   });
 
   it("does not claim Indeed or unrelated hosts", () => {
@@ -36,8 +44,14 @@ describe("adapterFor — host routing", () => {
     expect(adapterFor(new URL("https://nvidia.wd5.myworkdayjobs.com/job/x"))).toBeNull();
   });
 
+  it("only claims LinkedIn's /jobs/ paths, not feed/profile/messaging pages", () => {
+    expect(adapterFor(new URL("https://www.linkedin.com/feed/"))).toBeNull();
+    expect(adapterFor(new URL("https://www.linkedin.com/in/someone/"))).toBeNull();
+    expect(adapterFor(new URL("https://www.linkedin.com/messaging/"))).toBeNull();
+  });
+
   it("exposes one metadata row per adapter for the options page", () => {
-    expect(ADAPTER_META.map((m) => m.id).sort()).toEqual(["bestbuy-ca", "cibc", "rbc", "walmart"]);
+    expect(ADAPTER_META.map((m) => m.id).sort()).toEqual(["bestbuy-ca", "cibc", "linkedin", "rbc", "walmart"]);
   });
 });
 
@@ -125,6 +139,69 @@ describe("Phenom adapter", () => {
     if (result.status !== "ok") return;
     expect(result.posting.title).toBe("Associate");
     expect(result.posting.detection).toMatchObject({ method: "selector", confidence: "high" });
+  });
+});
+
+describe("LinkedIn adapter", () => {
+  it("Tier 1: reads JSON-LD, and extracts company FROM THE PAGE (multi-tenant, no fixed label)", () => {
+    const adapter = adapterFor(new URL(LINKEDIN_URL))!;
+    const result = adapter.extract(parse(LINKEDIN_JSONLD), LINKEDIN_URL);
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Senior Software Engineer – Go (Golang)");
+    expect(result.posting.company).toBe("General Motors");
+    expect(result.posting.location).toBe("Warren, MI, US");
+    expect(result.posting.salary?.min).toBe(140000);
+    expect(result.posting.detection).toMatchObject({ adapterId: "linkedin", method: "json-ld", confidence: "high" });
+  });
+
+  it("canonicalizes a messy split-view search URL to the stable /jobs/view/<id>/ form", () => {
+    const adapter = adapterFor(new URL(LINKEDIN_SEARCH_URL))!;
+    const result = adapter.extract(parse(LINKEDIN_JSONLD), LINKEDIN_SEARCH_URL);
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.sourceUrl).toBe("https://www.linkedin.com/jobs/view/4419969671/");
+  });
+
+  it("Tier 2: falls to the authenticated split-view SPA's selectors when JSON-LD is absent", () => {
+    const adapter = adapterFor(new URL(LINKEDIN_URL))!;
+    const result = adapter.extract(parse(LINKEDIN_DOM_ONLY), LINKEDIN_URL);
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Staff Software Engineer");
+    expect(result.posting.company).toBe("Acme Corp");
+    expect(result.posting.location).toBe("Toronto, ON, Canada");
+    expect(result.posting.detection).toMatchObject({ method: "selector", confidence: "high" });
+  });
+
+  it("Tier 2: also falls to the GUEST page's selectors when JSON-LD is absent", () => {
+    const adapter = adapterFor(new URL(LINKEDIN_URL))!;
+    const result = adapter.extract(parse(LINKEDIN_GUEST_DOM_ONLY), LINKEDIN_URL);
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Backend Engineer");
+    expect(result.posting.company).toBe("Acme Corp");
+    expect(result.posting.detection).toMatchObject({ method: "selector", confidence: "high" });
+  });
+
+  it("Tier 3: neither JSON-LD nor any known selector matched -> generic fallback, low confidence", () => {
+    const adapter = adapterFor(new URL(LINKEDIN_URL))!;
+    const result = adapter.extract(parse(LINKEDIN_BROKEN), LINKEDIN_URL);
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.detection).toMatchObject({ method: "structural", confidence: "low" });
+    expect(result.posting.title).toBe("Staff Software Engineer");
+    expect(result.posting.descriptionText).toContain("lead our platform team");
+    expect(result.posting.descriptionText).not.toContain("My Network");
+    // Multi-tenant + generic tier has no company selector to fall back to — honest
+    // "Unknown company" rather than a guess, consistent with the low-confidence label
+    // already telling the user to double check before sending.
+    expect(result.posting.company).toBe("Unknown company");
   });
 });
 

@@ -132,6 +132,73 @@ export const PHENOM_DOM_ONLY = `
 </body></html>
 `;
 
+// --- LinkedIn: JSON-LD present. Mirrors the real guest-page block fetched live
+//     2026-09-16 (linkedin.com/jobs/view/4419969671/, General Motors). ---
+export const LINKEDIN_JSONLD = `
+<html><head><title>General Motors hiring Senior Software Engineer | LinkedIn</title>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    "title": "Senior Software Engineer – Go (Golang)",
+    "datePosted": "2026-09-10",
+    "validThrough": "2026-10-10",
+    "employmentType": "FULL_TIME",
+    "hiringOrganization": { "@type": "Organization", "name": "General Motors" },
+    "jobLocation": { "@type": "Place", "address": {
+      "@type": "PostalAddress", "addressLocality": "Warren", "addressRegion": "MI", "addressCountry": "US" } },
+    "description": "${LONG("We are looking for a Senior Software Engineer to join our Go platform team.")} Base salary: $140,000 - $190,000"
+  }
+  </script>
+</head><body><div id="main-content"></div></body></html>
+`;
+
+// --- LinkedIn: no JSON-LD, but the authenticated split-view SPA's DOM selectors (current
+//     scraping-guide consensus, NOT independently verified live — see platforms.ts). ---
+export const LINKEDIN_DOM_ONLY = `
+<html><head><title>LinkedIn</title></head><body>
+  <div class="job-details-jobs-unified-top-card__container">
+    <h1 class="job-details-jobs-unified-top-card__job-title">Staff Software Engineer</h1>
+    <div class="job-details-jobs-unified-top-card__company-name"><a href="/company/acme">Acme Corp</a></div>
+    <div class="job-details-jobs-unified-top-card__primary-description-container">Toronto, ON, Canada</div>
+  </div>
+  <div id="job-details">
+    ${LONG("Acme Corp is looking for a Staff Software Engineer to lead our platform team.")}
+  </div>
+</body></html>
+`;
+
+// --- LinkedIn: no JSON-LD, but the GUEST page's DOM selectors (confirmed live
+//     2026-09-16 against linkedin.com/jobs/view/<id>/). ---
+export const LINKEDIN_GUEST_DOM_ONLY = `
+<html><head><title>LinkedIn</title></head><body>
+  <div class="top-card-layout">
+    <h1 class="top-card-layout__title">Backend Engineer</h1>
+    <a class="topcard__org-name-link" href="/company/acme">Acme Corp</a>
+    <span class="main-job-card__location">Remote</span>
+  </div>
+  <div class="description__text--rich">
+    ${LONG("Acme Corp is hiring a Backend Engineer for our platform team.")}
+  </div>
+</body></html>
+`;
+
+// --- LinkedIn: neither JSON-LD nor any known selector matched — only the generic tier
+//     can catch it (e.g. after one of LinkedIn's periodic redesigns). ---
+export const LINKEDIN_BROKEN = `
+<html><head><title>Staff Software Engineer | Acme Corp | LinkedIn</title></head><body>
+  <nav>Home My Network Jobs Messaging Notifications</nav>
+  <main>
+    <div class="renamed-job-card-abc">
+      <h1>Staff Software Engineer</h1>
+      <p>${LONG("Acme Corp is looking for a Staff Software Engineer to lead our platform team.")}</p>
+      <p>${LONG("You will partner with product and design to ship reliable, well-tested systems.")}</p>
+    </div>
+  </main>
+  <footer>About Accessibility User Agreement Privacy Policy</footer>
+</body></html>
+`;
+
 // --- Nothing job-shaped at all. ---
 export const NOT_A_JOB_PAGE = `
 <html><head><title>RBC</title></head><body>

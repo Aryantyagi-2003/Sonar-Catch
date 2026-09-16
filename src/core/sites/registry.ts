@@ -1,6 +1,7 @@
 import type { DetectionMethod, ExtractionResult } from "@/core/types";
 import { extractViaPlatform } from "@/core/sites/platform";
-import { WORKDAY_SELECTORS, PHENOM_SELECTORS } from "@/core/sites/platforms";
+import { WORKDAY_SELECTORS, PHENOM_SELECTORS, LINKEDIN_SELECTORS } from "@/core/sites/platforms";
+import { canonicalLinkedInJobUrl } from "@/core/sites/linkedin-url";
 
 // Named, per-company adapters. Two of them (RBC, Walmart) share the Phenom extractor and
 // two (Best Buy Canada, CIBC) share the Workday extractor — but each is registered
@@ -10,7 +11,7 @@ import { WORKDAY_SELECTORS, PHENOM_SELECTORS } from "@/core/sites/platforms";
 // Indeed is deliberately NOT here: its tiered selector detection (src/core/indeed/) is
 // untouched and dispatched separately by the content script.
 
-export type AtsPlatform = "workday" | "phenom";
+export type AtsPlatform = "workday" | "phenom" | "linkedin";
 
 export interface SiteAdapter {
   id: string;
@@ -56,16 +57,40 @@ function phenomAdapter(id: string, label: string, companyLabel: string, host: st
   };
 }
 
+function linkedinAdapter(): SiteAdapter {
+  const host = "www.linkedin.com";
+  return {
+    id: "linkedin",
+    label: "LinkedIn",
+    platform: "linkedin",
+    hosts: [host],
+    // Scoped to /jobs/ paths, not all of linkedin.com — matches manifest.json's narrower
+    // host permission and keeps the content script off feed/profile/messaging pages.
+    matches: (url) => url.hostname === host && url.pathname.startsWith("/jobs/"),
+    extract: (doc, sourceUrl) =>
+      extractViaPlatform(doc, canonicalLinkedInJobUrl(sourceUrl), {
+        adapterId: "linkedin",
+        adapterLabel: "LinkedIn",
+        // No fixed companyLabel: unlike the four sites below, LinkedIn hosts many
+        // different employers — the company has to come from the page itself (JSON-LD or
+        // selectors.company), same as Indeed's own approach.
+        selectors: LINKEDIN_SELECTORS,
+      }),
+  };
+}
+
 export const ADAPTERS: readonly SiteAdapter[] = [
   phenomAdapter("rbc", "RBC", "RBC", "jobs.rbc.com"),
-  // Walmart US career site. Verified 2026-08-28 that it's a Next.js/AEM front end (not the
-  // classic Phenom Angular one), but it's a Phenom-backed "headless" site and is expected
-  // to still publish JobPosting JSON-LD — its Tier-1 path is what should carry it. Its
-  // Tier-2 (Phenom DOM) selectors are UNVERIFIED against this front end; the generic tier
-  // is the real backstop until a live check confirms otherwise.
+  // Walmart US career site: a Phenom-backed Next.js/AEM front end (not the classic Phenom
+  // Angular one). Manually verified working live 2026-09 (JSON-LD tier).
   phenomAdapter("walmart", "Walmart", "Walmart", "careers.walmart.com"),
   workdayAdapter("bestbuy-ca", "Best Buy Canada", "Best Buy Canada", "bestbuycanada.wd3.myworkdayjobs.com"),
   workdayAdapter("cibc", "CIBC", "CIBC", "cibc.wd3.myworkdayjobs.com"),
+  // See platforms.ts's LINKEDIN_SELECTORS comment: Tier 1 (JSON-LD) is confirmed live on
+  // LinkedIn's guest job page; Tier 2 (the authenticated split-view SPA's own DOM) is
+  // UNVERIFIED — genuinely less certain than the other four adapters, not just unverified
+  // in the same routine way Walmart was.
+  linkedinAdapter(),
 ];
 
 export function adapterFor(url: URL): SiteAdapter | null {

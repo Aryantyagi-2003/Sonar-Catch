@@ -310,11 +310,18 @@ set of **named, per-company adapters** for other career sites:
 | Walmart (US) | `careers.walmart.com` | Phenom (headless / Next.js front end) |
 | Best Buy Canada | `bestbuycanada.wd3.myworkdayjobs.com` | Workday |
 | CIBC | `cibc.wd3.myworkdayjobs.com` | Workday |
+| LinkedIn Jobs | `www.linkedin.com/jobs/*` | LinkedIn's own platform (multi-tenant) |
 
-Two adapters share a Phenom extractor and two share a Workday one, but each is registered
-by name (`src/core/sites/registry.ts`) so a detection problem attributes to a specific
-company, not to "something Workday-ish". `host_permissions` / `content_scripts.matches`
-name these four hosts explicitly — no `<all_urls>`, so the install prompt stays honest.
+The first four share a Phenom or Workday extractor, LinkedIn has its own, but each is
+registered by name (`src/core/sites/registry.ts`) so a detection problem attributes to a
+specific site, not to "something Workday-ish". `host_permissions` /
+`content_scripts.matches` name these hosts explicitly — no `<all_urls>`, so the install
+prompt stays honest. LinkedIn's is scoped to `/jobs/*` specifically, not all of
+linkedin.com, keeping the content script off feed/profile/messaging pages.
+
+Unlike the other four (single-tenant: the site IS the employer), LinkedIn hosts many
+different employers, so its adapter has no fixed company label — company comes from the
+page itself (JSON-LD `hiringOrganization.name`, or a DOM selector), same as Indeed.
 
 ### Detect-and-alert, not silent adapters
 
@@ -324,11 +331,12 @@ the same three tiers:
 
 1. **JSON-LD** (`<script type="application/ld+json">` `JobPosting`) — the primary tier.
    It's what the site publishes for Google for Jobs, so it's server-rendered and far more
-   stable than internal CSS classes. Verified live 2026-08-28 to be present on RBC, CIBC,
-   and Best Buy Canada job pages. → reported as a confident **"detected"**.
-2. **Platform DOM selectors** — Workday `data-automation-id`, Phenom `data-ph-at-id`.
-   Only present after the SPA renders. Used when JSON-LD is missing. → confident
-   **"detected"**.
+   stable than internal CSS classes. Verified live to be present on RBC, CIBC, Best Buy
+   Canada (2026-08-28), and LinkedIn's guest job page (2026-09-16). → reported as a
+   confident **"detected"**.
+2. **Platform/site DOM selectors** — Workday `data-automation-id`, Phenom `data-ph-at-id`,
+   LinkedIn's own class names. Only present after the SPA renders. Used when JSON-LD is
+   missing. → confident **"detected"**.
 3. **Generic structural fallback** — largest coherent job-shaped text block on the page.
    Reached only when tiers 1–2 both miss, i.e. the site's structure has drifted since the
    adapter was written. The widget switches to a distinct amber **"Detected via fallback —
@@ -349,17 +357,33 @@ out mid-application.
 
 ### Verified vs. not
 
-- **RBC, CIBC, Best Buy Canada** — tier-1 JSON-LD extraction run against real, live job
-  pages (raw HTML fetched 2026-08-28) through the actual adapter code: correct title,
-  company, location, description, and pay range on all three.
-- **Walmart (US)** — `careers.walmart.com` was confirmed to be a Next.js/AEM front end
-  (not the classic Phenom Angular one). Its job-detail pages render client-side and a live
-  job URL couldn't be obtained without executing their JS, so its adapter is **unverified**
-  — it's expected to work via tier-1 JSON-LD, with the generic tier as backstop, but that
-  needs a real-browser pass to confirm.
-- Tiers 2–3 (rendered-DOM selectors, structural fallback) are covered by unit tests
-  against realistic fixtures; confirming them on the live sites needs a real browser, the
-  same disclosed constraint as loading the extension into Chrome via automation (above).
+- **RBC, CIBC, Best Buy Canada, Walmart (US)** — manually verified live in-browser
+  (2026-09): the widget correctly detects and lets you send a real posting on each site.
+  Tier-1 JSON-LD was additionally confirmed by running the actual adapter code against raw
+  HTML fetched directly from live job pages.
+- **LinkedIn** — tier 1 (JSON-LD) AND, unexpectedly usefully, the guest page's own tier-2
+  selectors (`.topcard__org-name-link`, `.top-card-layout__title`,
+  `.description__text--rich`) were both confirmed live 2026-09-16 by running the real
+  adapter against a real fetched `linkedin.com/jobs/view/<id>/` page — correct title,
+  company, location, and description both with and without the JSON-LD present.
+  **What's genuinely unverified, and different in kind from the other four:** that guest
+  page is a full-page load reachable without logging in. The extension's actual workload is
+  mostly LinkedIn's *authenticated* split-view search SPA
+  (`linkedin.com/jobs/search/?currentJobId=<id>`, content swapped in place via client-side
+  routing — the same shape as Indeed's split view). Fetching that requires a logged-in
+  LinkedIn session and executing its client-side JS, neither of which was available here —
+  so whether tier 1/2 actually fire on THAT surface (vs. falling to the low-confidence
+  generic tier) is unconfirmed. The `job-details-jobs-unified-top-card__*` /
+  `jobs-description__content` selectors in `src/core/sites/platforms.ts` are current
+  (2026) scraping-guide consensus for that authenticated UI, not independently confirmed.
+  LinkedIn also redesigns/A-B-tests this UI on its own schedule (not a shared platform
+  convention like Workday's `data-automation-id`), so expect this adapter, more than the
+  other four, to need re-verification and possible re-tuning after a real logged-in pass —
+  the adapter-health table below is exactly the mechanism for noticing that when it happens.
+- Tiers 2–3 (rendered-DOM selectors, structural fallback) beyond what's called out above
+  are covered by unit tests against realistic fixtures; confirming them on the live sites
+  needs a real browser, the same disclosed constraint as loading the extension into Chrome
+  via automation (above).
 
 ### Not built: self-healing
 
@@ -368,6 +392,38 @@ LLM call). That would trade the honest "this looks low-confidence, review it" si
 silent guess. If a dedicated adapter starts falling back, that's a prompt to re-investigate
 the site by hand. Automatic self-repair is a possible future direction, not a current
 feature.
+
+### Cross-site duplicate detection
+
+If you apply to the same job on two different sites (e.g. it's on both LinkedIn and the
+company's own career site), does Sonar Catch tell you? Short answer: **the mechanism
+already exists and is site-agnostic** — every send checks `/api/ingest/lookup` first,
+regardless of which adapter detected the posting, and shows **"Already logged"** with a
+link to the existing entry on a match (see `handleSendPosting` in
+`src/adapters/webextension/background.ts`). Nothing about that check is Indeed-specific or
+per-adapter; adding LinkedIn as a fifth source didn't require touching it.
+
+What this extension *can't* claim: the actual "is this the same job" decision is fuzzy
+matching that happens server-side, in Sonar's own repo, which this project doesn't control
+or have visibility into. What was in scope here, and shipped
+(`src/core/canonical-company.ts`), is removing one concrete, extension-side source of false
+negatives: **the same employer gets named differently depending on where the posting was
+found.** Real examples seen live while building this — "Canadian Imperial Bank of Commerce
+(Canada)" vs. "CIBC", "050 Best Buy Canada Ltd." vs. "Best Buy Canada", "Royal Bank of
+Canada" vs. "RBC". The four direct career-site adapters already avoid this (each has a
+fixed, clean company label), but Indeed and LinkedIn both extract whatever text the page
+itself uses — so if you saw a CIBC posting on LinkedIn today and the direct CIBC site
+tomorrow, the two `company` strings could plausibly not match without help.
+`canonicalCompanyName` strips legal suffixes ("Inc.", "Ltd.", "Corp."), regional
+parentheticals ("(Canada)"), and Workday's leading numeric tenant codes, then checks a
+small alias table, before the company name is used in the duplicate-lookup query — never
+before it's sent to Sonar's own ingest/classification pipeline, so what gets stored/shown
+is unaffected.
+
+Deliberately **not** attempted: normalizing the job title/role. Trimming words from a title
+risks merging two genuinely different postings (e.g. "Software Engineer I" vs. "Software
+Engineer II") into one false match, which is worse than missing a real duplicate. That
+judgment call belongs in Sonar's own fuzzy-matching logic, not in this extension.
 
 ## Scope
 

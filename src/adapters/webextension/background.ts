@@ -2,6 +2,7 @@ import browser from "webextension-polyfill";
 
 import { submitJobPosting, confirmJobPosting, lookupExistingApplication, type ExistingApplicationMatch } from "@/core/sonar-client";
 import { composePostingText } from "@/core/compose-posting-text";
+import { canonicalCompanyName } from "@/core/canonical-company";
 import { getSonarSettings } from "@/adapters/webextension/storage";
 import type { ExtractedJobPosting } from "@/core/types";
 
@@ -20,8 +21,19 @@ async function handleSendPosting(posting: ExtractedJobPosting, dateApplied: stri
   // Checked before /api/ingest, not after — catching the duplicate here also skips the
   // Gemini classification call that /api/ingest would otherwise burn on a posting we're
   // just going to throw away.
+  //
+  // This lookup is already cross-site by construction — it's one /api/ingest/lookup call
+  // regardless of which adapter (Indeed, LinkedIn, or a direct career site) detected the
+  // posting. canonicalCompanyName only smooths out one real source of false negatives:
+  // the same employer being named differently depending on where the posting was found
+  // (Indeed/LinkedIn extract whatever text the page uses; "Canadian Imperial Bank of
+  // Commerce (Canada)" vs "CIBC" is a real example seen live). It does NOT touch the role
+  // text (see that function's header comment for why), and it does not change what's
+  // actually sent to Sonar's ingest/classification pipeline below — only this query. The
+  // fuzzy-match decision of "is this really the same job" is still made server-side in
+  // Sonar, which this extension has no visibility into.
   const lookupResult = await lookupExistingApplication(settings.sonarUrl, settings.apiToken, {
-    company: posting.company,
+    company: canonicalCompanyName(posting.company),
     role: posting.title,
     sourceUrl: posting.sourceUrl,
   });

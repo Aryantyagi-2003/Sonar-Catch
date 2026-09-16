@@ -20,15 +20,20 @@ export interface PlatformSelectors {
   title: readonly string[];
   description: readonly string[];
   location: readonly string[];
+  /** Only needed for multi-tenant sites (LinkedIn) where the page itself names the
+   *  employer. Single-tenant adapters (RBC, Workday tenants) omit this and rely on
+   *  `AdapterContext.companyLabel` instead. */
+  company?: readonly string[];
 }
 
 export interface AdapterContext {
   adapterId: string;
   adapterLabel: string;
-  /** Career sites we target are single-tenant, so the posting DOM rarely names the company
-   *  cleanly (or names it as "050 Best Buy Canada Ltd."). This label wins over whatever the
-   *  page says. */
-  companyLabel: string;
+  /** Single-tenant career sites (RBC, the Workday tenants) are one employer, so this fixed,
+   *  clean label always wins over whatever the page says (which is often noisy, e.g. "050
+   *  Best Buy Canada Ltd."). Multi-tenant sites (LinkedIn) leave this unset and rely on
+   *  `selectors.company` / JSON-LD's `hiringOrganization.name` instead. */
+  companyLabel?: string;
   selectors: PlatformSelectors;
 }
 
@@ -77,9 +82,10 @@ export function extractViaPlatform(doc: Document, sourceUrl: string, ctx: Adapte
   if (descriptionText && descriptionText.length >= MIN_DESCRIPTION_LENGTH) {
     const title = textOf(queryFirst(doc, ctx.selectors.title));
     const location = textOf(queryFirst(doc, ctx.selectors.location));
+    const company = ctx.companyLabel || textOf(queryFirst(doc, ctx.selectors.company ?? []));
     const posting: ExtractedJobPosting = {
       title: title ?? ld?.title ?? "Unknown title",
-      company: ctx.companyLabel || "Unknown company",
+      company: company || ld?.company || "Unknown company",
       location: location ?? ld?.location ?? null,
       salary: parseSalaryText(descriptionText),
       descriptionText,
