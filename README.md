@@ -311,8 +311,9 @@ set of **named, per-company adapters** for other career sites:
 | Best Buy Canada | `bestbuycanada.wd3.myworkdayjobs.com` | Workday |
 | CIBC | `cibc.wd3.myworkdayjobs.com` | Workday |
 | LinkedIn Jobs | `www.linkedin.com/jobs/*` | LinkedIn's own platform (multi-tenant) |
+| Shopify | `www.shopify.com/careers/*` | Custom front end (Ashby-backed), schema.org microdata |
 
-The first four share a Phenom or Workday extractor, LinkedIn has its own, but each is
+The first four share a Phenom or Workday extractor, LinkedIn and Shopify have their own, but each is
 registered by name (`src/core/sites/registry.ts`) so a detection problem attributes to a
 specific site, not to "something Workday-ish". `host_permissions` /
 `content_scripts.matches` name these hosts explicitly — no `<all_urls>`, so the install
@@ -322,6 +323,21 @@ linkedin.com, keeping the content script off feed/profile/messaging pages.
 Unlike the other four (single-tenant: the site IS the employer), LinkedIn hosts many
 different employers, so its adapter has no fixed company label — company comes from the
 page itself (JSON-LD `hiringOrganization.name`, or a DOM selector), same as Indeed.
+
+**Shopify** ships no JSON-LD at all and renders its postings client-side (the server HTML
+has an empty `<main>`), so it runs on tier 2: the `itemtype="https://schema.org/JobPosting"`
+/ `itemprop="description"` microdata plus the heading structure, confirmed against a real
+job page rendered in headless Chrome (2026-09-20). It claims all of `/careers` but only
+`/careers/<slug>_<uuid>` is treated as a posting — the listing page stays silent instead of
+showing "couldn't detect".
+
+**LinkedIn's logged-in split view** (`/jobs/search/`, `/jobs/collections/`,
+`/jobs/search-results/`) is read differently from every other site: the open job's id is
+always in the URL (`?currentJobId=`), so the content script fetches the public
+`linkedin.com/jobs/view/<id>/` page for that id (no cookies, one request per job viewed,
+cached) and extracts from that, instead of scraping the SPA's DOM, which can't be checked
+without a session and which LinkedIn changes freely. If that fetch fails or yields nothing
+confident, it falls back to reading the live page as before.
 
 ### Detect-and-alert, not silent adapters
 
@@ -361,7 +377,16 @@ out mid-application.
   (2026-09): the widget correctly detects and lets you send a real posting on each site.
   Tier-1 JSON-LD was additionally confirmed by running the actual adapter code against raw
   HTML fetched directly from live job pages.
-- **LinkedIn** — tier 1 (JSON-LD) AND, unexpectedly usefully, the guest page's own tier-2
+- **Shopify** — the real adapter code was run against a real job page rendered in headless
+  Chrome (2026-09-20): correct title, location, company and description. Not yet exercised
+  in the loaded extension itself.
+- **LinkedIn (public `/jobs/view/<id>/` page)** — re-verified 2026-09-20 against two live
+  postings: the guest page currently carries **no JSON-LD**, so extraction rides entirely on
+  the tier-2 guest selectors (`.top-card-layout__title`, `.topcard__org-name-link`,
+  `.topcard__flavor--bullet`, `.show-more-less-html__markup`), which all matched. That
+  check also caught a real bug: `.main-job-card__location` matches a "similar jobs" card
+  before the open job's own location, so the location selector order was fixed.
+- **LinkedIn (older notes)** — tier 1 (JSON-LD) AND, unexpectedly usefully, the guest page's own tier-2
   selectors (`.topcard__org-name-link`, `.top-card-layout__title`,
   `.description__text--rich`) were both confirmed live 2026-09-16 by running the real
   adapter against a real fetched `linkedin.com/jobs/view/<id>/` page — correct title,

@@ -82,11 +82,39 @@ export const LINKEDIN_SELECTORS: PlatformSelectors = {
     "#job-details",
     ".jobs-description__content .jobs-box__html-content",
     ".jobs-description-content__text",
+    // Guest page — confirmed live 2026-09-20. The markup div is the description proper;
+    // its `.description__text--rich` parent also contains the "Show more / Show less"
+    // button labels, which would end up in the text sent to Sonar.
+    ".show-more-less-html__markup",
     ".description__text--rich", // guest page — confirmed live 2026-09-16
   ],
   location: [
     ".job-details-jobs-unified-top-card__primary-description-container",
     ".jobs-unified-top-card__bullet",
-    ".main-job-card__location", // guest page — confirmed live 2026-09-16
+    // Guest page — confirmed live 2026-09-20. This is the open job's OWN location (the
+    // first `.topcard__flavor--bullet` under the title; the second is the applicant count).
+    // It must come before `.main-job-card__location`: that class is also used by every
+    // "similar jobs" card further down the same page, and (verified live 2026-09-20) the
+    // first match in document order is a different job's location.
+    ".top-card-layout__second-subline .topcard__flavor--bullet",
+    ".main-job-card__location",
   ],
+};
+
+// Shopify's careers site (www.shopify.com/careers/<slug>_<uuid>). Verified live 2026-09-20
+// by rendering a real job page in headless Chrome: it ships NO JSON-LD at all (not in the
+// server HTML, not after hydration) and the server HTML has an empty <main> — the posting
+// is client-rendered. What it does carry, once rendered, is schema.org *microdata* on the
+// posting's wrapper (`itemtype="https://schema.org/JobPosting"`, `itemprop="description"`),
+// which is what the description selector keys on: far more durable than its Tailwind
+// utility classes. Note the description microdata is only the role body ("Team Overview",
+// "What You'll Do", ...) — the "About Shopify" / "About you" boilerplate sections sit
+// outside it, which is exactly what we want to send. There are TWO <h1>s in the wrapper:
+// the first is the title, the second is a "We hire people, not resumes" apply banner; DOM
+// order makes `querySelector` pick the right one. Location is a <li> beside the title
+// (the one with the pin icon; the next <li> is the department).
+export const SHOPIFY_SELECTORS: PlatformSelectors = {
+  title: ['[itemtype="https://schema.org/JobPosting"] h1', "main h1"],
+  description: ['[itemtype="https://schema.org/JobPosting"] [itemprop="description"]', '[itemprop="description"]'],
+  location: ["main h1 ~ ul > li:has(> img)", "main h1 ~ ul > li:first-child"],
 };

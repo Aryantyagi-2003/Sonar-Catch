@@ -199,6 +199,91 @@ export const LINKEDIN_BROKEN = `
 </body></html>
 `;
 
+// --- LinkedIn guest page, shaped like the REAL one fetched live 2026-09-20 (job 4464579833):
+//     no JSON-LD, the job's own location is the first `.topcard__flavor--bullet`, and a
+//     "similar jobs" card further down uses `.main-job-card__location` for a DIFFERENT job
+//     — which is first in document order among elements with that class. ---
+export const LINKEDIN_GUEST_WITH_SIMILAR_JOBS = `
+<html><head><title>Audiobooks.com hiring Data Scientist | LinkedIn</title></head><body>
+  <section class="top-card-layout">
+    <div class="top-card-layout__entity-info">
+      <h1 class="top-card-layout__title topcard__title">Data Scientist / Analytics Engineer</h1>
+      <h4 class="top-card-layout__second-subline">
+        <div class="topcard__flavor-row">
+          <span class="topcard__flavor"><a class="topcard__org-name-link" href="/company/audiobookscom">Audiobooks.com</a></span>
+          <span class="topcard__flavor topcard__flavor--bullet">Burlington, Ontario, Canada</span>
+        </div>
+        <div class="topcard__flavor-row">
+          <span class="posted-time-ago__text topcard__flavor--metadata">1 week ago</span>
+          <span class="num-applicants__caption topcard__flavor--metadata topcard__flavor--bullet">174 applicants</span>
+        </div>
+      </h4>
+    </div>
+  </section>
+  <div class="description__text description__text--rich">
+    <section class="show-more-less-html"><div class="show-more-less-html__markup">
+      ${LONG("Audiobooks.com is seeking a hands-on Data Scientist / Analytics Engineer.")}
+    </div></section>
+  </div>
+  <section class="similar-jobs">
+    <div class="base-main-card__metadata">
+      <span class="main-job-card__location">Toronto, Ontario, Canada</span>
+    </div>
+  </section>
+</body></html>
+`;
+
+// --- Shopify job page, shaped like the REAL rendered DOM (headless Chrome, 2026-09-20):
+//     microdata wrapper, TWO <h1>s (title, then an "apply" banner), location <li> with a pin
+//     icon beside a department <li>, description microdata holding only the role body, and
+//     hidden microdata spans that carry values in `content` attributes, not text. ---
+export const SHOPIFY_JOB = `
+<html><head><title>Senior Compliance Analyst - Shopify</title></head><body>
+<main data-job="6debf006-a6d2-4725-b152-38e932097480">
+  <div itemscope itemtype="https://schema.org/JobPosting">
+    <a href="/careers">Back</a>
+    <section>
+      <div class="md:grow">
+        <h1><span class="richtext">Senior Compliance Analyst</span></h1>
+        <ul>
+          <li><img src="pin.svg" alt="" width="18" height="18">Remote - Americas</li>
+          <li>Legal</li>
+        </ul>
+      </div>
+      <button>Apply Now</button>
+    </section>
+    <section>
+      <h2>About the role</h2>
+      <div itemprop="description">
+        <h2><strong>Team Overview</strong></h2>
+        <p>${LONG("Within the Shopify Legal Team, the Compliance Team ensures regulatory commitments are met.")}</p>
+        <h2><strong>What You’ll Do</strong></h2>
+        <ul><li><p>Own day-to-day compliance responsibilities.</p></li></ul>
+      </div>
+    </section>
+    <section><h2>About Shopify</h2><div class="richtext"><p>Opportunity is not evenly distributed.</p></div></section>
+    <div class="hidden" itemscope itemprop="hiringOrganization" itemtype="https://schema.org/Organization">
+      <span itemprop="name">Shopify</span>
+    </div>
+    <div class="hidden"><span itemprop="title" content="Senior Compliance Analyst"></span></div>
+    <section>
+      <h1>We hire people, not resumes. If you think you’re right for the role, apply now.</h1>
+      <ul></ul>
+    </section>
+  </div>
+  <footer role="contentinfo"><h2>Work with us in your early career</h2></footer>
+</main>
+</body></html>
+`;
+
+// --- Shopify listing page: lots of job links, no single posting. ---
+export const SHOPIFY_LISTING = `
+<html><head><title>Careers - Shopify</title></head><body><main>
+  <h1>Join the fully-remote rocketship</h1>
+  <ul><li><a href="/careers/senior-compliance-analyst_8639c248-b9f3-45ca-9ea8-5b66a4c7d208">Senior Compliance Analyst</a></li></ul>
+</main></body></html>
+`;
+
 // --- Nothing job-shaped at all. ---
 export const NOT_A_JOB_PAGE = `
 <html><head><title>RBC</title></head><body>

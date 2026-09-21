@@ -1,7 +1,7 @@
 import type { DetectionMethod, ExtractionResult } from "@/core/types";
 import { extractViaPlatform } from "@/core/sites/platform";
-import { WORKDAY_SELECTORS, PHENOM_SELECTORS, LINKEDIN_SELECTORS } from "@/core/sites/platforms";
-import { canonicalLinkedInJobUrl } from "@/core/sites/linkedin-url";
+import { WORKDAY_SELECTORS, PHENOM_SELECTORS, LINKEDIN_SELECTORS, SHOPIFY_SELECTORS } from "@/core/sites/platforms";
+import { canonicalLinkedInJobUrl, linkedInCurrentJobId } from "@/core/sites/linkedin-url";
 
 // Named, per-company adapters. Two of them (RBC, Walmart) share the Phenom extractor and
 // two (Best Buy Canada, CIBC) share the Workday extractor — but each is registered
@@ -11,7 +11,7 @@ import { canonicalLinkedInJobUrl } from "@/core/sites/linkedin-url";
 // Indeed is deliberately NOT here: its tiered selector detection (src/core/indeed/) is
 // untouched and dispatched separately by the content script.
 
-export type AtsPlatform = "workday" | "phenom" | "linkedin";
+export type AtsPlatform = "workday" | "phenom" | "linkedin" | "shopify";
 
 export interface SiteAdapter {
   id: string;
@@ -20,6 +20,16 @@ export interface SiteAdapter {
   /** Hosts this adapter claims, for display on the options page. */
   hosts: readonly string[];
   matches(url: URL): boolean;
+  /** Optional. Some adapters claim a whole path prefix (so the content script is already
+   *  running when a client-side navigation lands on a posting) but only some pages under it
+   *  ARE a posting. When this returns false the widget stays hidden, instead of reporting
+   *  "couldn't detect a job posting" on a page that was never meant to have one. */
+  isPostingPage?(url: URL): boolean;
+  /** Optional. URL of a server-rendered copy of the posting currently open, for sites whose
+   *  live SPA DOM is hard to read reliably (LinkedIn's logged-in search). The content script
+   *  fetches it without credentials and runs `extract` on the result; if that yields nothing
+   *  high-confidence it falls back to the live page. */
+  remoteSource?(url: URL): string | null;
   extract(doc: Document, sourceUrl: string): ExtractionResult;
 }
 
@@ -67,6 +77,15 @@ function linkedinAdapter(): SiteAdapter {
     // Scoped to /jobs/ paths, not all of linkedin.com — matches manifest.json's narrower
     // host permission and keeps the content script off feed/profile/messaging pages.
     matches: (url) => url.hostname === host && url.pathname.startsWith("/jobs/"),
+    // The logged-in split view (`/jobs/search/`, `/jobs/collections/`, `/jobs/search-results/`)
+    // swaps the open job into the page in place, in a DOM that LinkedIn reshuffles freely and
+    // that can't be checked without a session. The open job's id is always in the URL though,
+    // and `/jobs/view/<id>/` is a public, server-rendered page (verified live 2026-09-20) —
+    // read that instead of scraping the SPA. Live-DOM extraction remains the fallback.
+    remoteSource: (url) => {
+      const id = linkedInCurrentJobId(url);
+      return id ? `https://www.linkedin.com/jobs/view/${id}/` : null;
+    },
     extract: (doc, sourceUrl) =>
       extractViaPlatform(doc, canonicalLinkedInJobUrl(sourceUrl), {
         adapterId: "linkedin",
@@ -75,6 +94,29 @@ function linkedinAdapter(): SiteAdapter {
         // different employers — the company has to come from the page itself (JSON-LD or
         // selectors.company), same as Indeed's own approach.
         selectors: LINKEDIN_SELECTORS,
+      }),
+  };
+}
+
+function shopifyAdapter(): SiteAdapter {
+  const host = "www.shopify.com";
+  return {
+    id: "shopify",
+    label: "Shopify",
+    platform: "shopify",
+    hosts: [host],
+    // Claims all of /careers (matching the manifest) so the content script is already
+    // running if the site client-side-navigates from the listing into a posting...
+    matches: (url) => url.hostname === host && (url.pathname === "/careers" || url.pathname.startsWith("/careers/")),
+    // ...but only `/careers/<slug>_<uuid>` is a posting. The listing page and the other
+    // /careers/* marketing pages (e.g. /careers/extraordinary) stay silent.
+    isPostingPage: (url) => /^\/careers\/[^/]+_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/?$/i.test(url.pathname),
+    extract: (doc, sourceUrl) =>
+      extractViaPlatform(doc, sourceUrl, {
+        adapterId: "shopify",
+        adapterLabel: "Shopify",
+        companyLabel: "Shopify",
+        selectors: SHOPIFY_SELECTORS,
       }),
   };
 }
@@ -91,6 +133,9 @@ export const ADAPTERS: readonly SiteAdapter[] = [
   // UNVERIFIED — genuinely less certain than the other four adapters, not just unverified
   // in the same routine way Walmart was.
   linkedinAdapter(),
+  // Shopify's own careers site (Ashby-backed, custom front end). No JSON-LD — see
+  // SHOPIFY_SELECTORS for what it does expose. Verified against a live job page 2026-09-20.
+  shopifyAdapter(),
 ];
 
 export function adapterFor(url: URL): SiteAdapter | null {

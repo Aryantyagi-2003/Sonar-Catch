@@ -25,3 +25,10 @@ export function canonicalLinkedInJobUrl(rawUrl: string): string {
 
   return rawUrl;
 }
+
+/** The job id LinkedIn's split-view pages carry as `?currentJobId=<id>` (search, collections,
+ *  and the newer `/jobs/search-results/`), or null when the page isn't showing one. */
+export function linkedInCurrentJobId(url: URL): string | null {
+  const id = url.searchParams.get("currentJobId");
+  return id && /^\d+$/.test(id) ? id : null;
+}

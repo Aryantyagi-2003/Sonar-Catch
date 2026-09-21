@@ -1,10 +1,11 @@
 import browser from "webextension-polyfill";
 
 import { adapterFor, healthStatusForMethod, type SiteAdapter } from "@/core/sites/registry";
-import type { ExtractedJobPosting } from "@/core/types";
+import type { ExtractedJobPosting, ExtractionResult } from "@/core/types";
 import type { ExistingApplicationMatch } from "@/core/sonar-client";
 import { renderWidget, setSendHandler, type WidgetState } from "@/adapters/webextension/ui";
 import { recordAdapterHealth } from "@/adapters/webextension/storage";
+import { extractFromRemote } from "@/adapters/webextension/remote-posting";
 
 // The non-Indeed detection loop. Shares the widget and the background SEND_POSTING message
 // (so the send/lookup/duplicate flow is byte-for-byte the same as Indeed's) but does its
@@ -26,7 +27,24 @@ function widgetStateForPosting(posting: ExtractedJobPosting): WidgetState {
 }
 
 async function runExtraction(adapter: SiteAdapter): Promise<void> {
-  const result = adapter.extract(document, window.location.href);
+  const href = window.location.href;
+  const url = new URL(href);
+
+  // The adapter claims this whole section of the site but this page isn't a posting
+  // (e.g. Shopify's /careers listing) — say nothing rather than "couldn't detect".
+  if (adapter.isPostingPage && !adapter.isPostingPage(url)) {
+    currentPosting = null;
+    renderWidget({ kind: "hidden" });
+    return;
+  }
+
+  // Prefer the server-rendered copy of the open posting where the adapter has one (LinkedIn's
+  // logged-in split view), keyed on the URL rather than on whatever the SPA has painted.
+  const remote = await extractFromRemote(adapter, url);
+  // The SPA moved on while we waited; the URL poll has already queued a run for the new page.
+  if (window.location.href !== href) return;
+
+  const result: ExtractionResult = remote ? { status: "ok", posting: remote } : adapter.extract(document, href);
 
   if (result.status === "loading") return;
 
