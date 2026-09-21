@@ -114,3 +114,43 @@ describe("extractIndeedJobPosting — loading and empty states", () => {
     expect(result.status).toBe("not-found");
   });
 });
+
+describe("extractIndeedJobPosting — title survives stale title selectors", () => {
+  const pane = (header: string) => `
+    <html><body>
+      <div id="mosaic-provider-jobcards"><li data-testid="slider_item"><h2 class="jobTitle">Other Job</h2></li></div>
+      <div class="jobsearch-RightPane">
+        ${header}
+        <div id="jobDescriptionText">
+          <h2>Responsibilities</h2>
+          You will build and operate data pipelines, partner with analysts, and own the
+          reliability of our reporting stack across a fast-moving, fully remote team.
+        </div>
+        <h2>Job details</h2>
+      </div>
+    </body></html>`;
+
+  it("falls back to the pane's first heading when no title selector matches", () => {
+    const html = pane(`<div class="renamed-header"><h2 class="new-abc123">Data Engineer</h2>
+      <div data-testid="inlineHeader-companyName">Acme</div></div>`);
+    const result = extractIndeedJobPosting(parse(html), "https://www.indeed.com/jobs");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Data Engineer");
+    expect(result.posting.company).toBe("Acme");
+  });
+
+  it("never picks a heading from the description body or a section label, or the left list", () => {
+    const html = pane(`<div data-testid="inlineHeader-companyName">Acme</div>`);
+    const result = extractIndeedJobPosting(parse(html), "https://www.indeed.com/jobs");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Unknown title");
+  });
+
+  it("strips Indeed's hidden ' - job post' suffix", () => {
+    const html = pane(`<h1 class="jobsearch-JobInfoHeader-title">Data Engineer - job post</h1>`);
+    const result = extractIndeedJobPosting(parse(html), "https://www.indeed.com/jobs");
+    expect(result.status === "ok" && result.posting.title).toBe("Data Engineer");
+  });
+});

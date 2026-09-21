@@ -26,6 +26,28 @@ function textOf(el: Element | null): string | null {
   return text.length > 0 ? text : null;
 }
 
+// Headings that live in the detail pane but are section labels, never the job title.
+const NON_TITLE_HEADINGS = /^(job details|profile insights|full job description|job description|benefits|pay|qualifications|apply now|location|report job|about the company)\b/i;
+
+/** Last-resort title, for when every DETAIL_TITLE_SELECTORS entry has gone stale (Indeed
+ *  renames these freely): the first h1/h2 in the pane that is real text, isn't a section
+ *  label, and isn't inside the description body. The title heading sits at the very top of
+ *  the pane's header, above the "Job details"/"Profile insights" section headings. */
+function headingTitle(container: Element, description: Element | null): string | null {
+  for (const heading of Array.from(container.querySelectorAll("h1, h2"))) {
+    if (description && description.contains(heading)) continue;
+    const text = cleanTitle(textOf(heading));
+    if (text && text.length <= 200 && !NON_TITLE_HEADINGS.test(text)) return text;
+  }
+  return null;
+}
+
+/** Indeed appends a visually-hidden " - job post" to the title element's text. */
+function cleanTitle(text: string | null): string | null {
+  const cleaned = text?.replace(/\s*[-–—]\s*job post$/i, "").trim() ?? "";
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 function isSkeletonPresent(container: Element): boolean {
   if (container.getElementsByClassName(SKELETON_CLASS).length > 0) return true;
   return container.querySelector(`[data-testid="${SKELETON_TEST_ID}"]`) !== null;
@@ -91,13 +113,15 @@ export function extractIndeedJobPosting(doc: Document, sourceUrl: string): Extra
 
   if (isSkeletonPresent(container.el)) return { status: "loading" };
 
-  const title = textOf(queryFirst(container.el, DETAIL_TITLE_SELECTORS));
+  const descriptionEl = queryFirst(container.el, DETAIL_DESCRIPTION_SELECTORS);
+  const title =
+    cleanTitle(textOf(queryFirst(container.el, DETAIL_TITLE_SELECTORS))) ?? headingTitle(container.el, descriptionEl);
   const company = textOf(queryFirst(container.el, DETAIL_COMPANY_SELECTORS));
   const location = textOf(queryFirst(container.el, DETAIL_LOCATION_SELECTORS));
   // Falls back to the whole container's text when no description-specific selector
   // matches — this is the final fallback tier, since a structurally-located container has
   // no known sub-selector to try in the first place.
-  const descriptionText = textOf(queryFirst(container.el, DETAIL_DESCRIPTION_SELECTORS)) ?? textOf(container.el);
+  const descriptionText = textOf(descriptionEl) ?? textOf(container.el);
 
   if (!descriptionText || descriptionText.length < MIN_DESCRIPTION_LENGTH) {
     return { status: "not-found" };
