@@ -153,4 +153,42 @@ describe("extractIndeedJobPosting — title survives stale title selectors", () 
     const result = extractIndeedJobPosting(parse(html), "https://www.indeed.com/jobs");
     expect(result.status === "ok" && result.posting.title).toBe("Data Engineer");
   });
+
+  // Regression: 0.1.7 shipped headingTitle() without "job type" in its exclusion list, so
+  // on a posting where DETAIL_TITLE_SELECTORS missed, it reported Indeed's "Job type" chip
+  // heading as the job title instead of falling back further or finding the real one.
+  it("skips the 'Job type' metadata chip heading, live 0.1.7 regression", () => {
+    const html = pane(
+      `<h1 class="new-title-abc123">Data Engineer</h1>
+       <div class="job-metadata-chips"><h2>Job type</h2><span>Full-time</span></div>`,
+    );
+    const result = extractIndeedJobPosting(parse(html), "https://www.indeed.com/jobs");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Data Engineer");
+  });
+
+  it("prefers an h1 title over an earlier h2/h3 metadata chip in DOM order", () => {
+    const html = pane(
+      `<div class="job-metadata-chips"><h3>Pay</h3><span>$100,000 a year</span></div>
+       <h1 class="new-title-abc123">Data Engineer</h1>`,
+    );
+    const result = extractIndeedJobPosting(parse(html), "https://www.indeed.com/jobs");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Data Engineer");
+  });
+
+  it("skips other known metadata chip headings (shift, location, benefits) when no h1 exists", () => {
+    const html = pane(
+      `<h3>Shift and schedule</h3><span>Day shift</span>
+       <h2 class="new-abc">Senior Data Engineer</h2>
+       <h3>Location</h3><span>Remote</span>
+       <h3>Benefits</h3><span>Health insurance</span>`,
+    );
+    const result = extractIndeedJobPosting(parse(html), "https://www.indeed.com/jobs");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Senior Data Engineer");
+  });
 });

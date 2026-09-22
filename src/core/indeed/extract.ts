@@ -26,18 +26,30 @@ function textOf(el: Element | null): string | null {
   return text.length > 0 ? text : null;
 }
 
-// Headings that live in the detail pane but are section labels, never the job title.
-const NON_TITLE_HEADINGS = /^(job details|profile insights|full job description|job description|benefits|pay|qualifications|apply now|location|report job|about the company)\b/i;
+// Headings that live in the detail pane but are section labels or metadata chips, never
+// the job title. Caught live in 0.1.7: this list omitted "job type", so on postings where
+// the real title selectors missed, headingTitle below picked up Indeed's "Job type" chip
+// heading and reported THAT as the title. Job metadata chips (job type, pay, shift,
+// location) are exactly the kind of short h2/h3 label this heuristic is most likely to
+// mistake for a title, so the list is intentionally broad rather than patched one label at
+// a time.
+const NON_TITLE_HEADINGS =
+  /^(job details|profile insights|full job description|job description|benefits(?! plus)|pay\b|pay range|job type|shift and schedule|shift\b|schedule\b|location\b|qualifications|apply now|report job|about the company|about this job|similar jobs|employer questions?|application questions?|company info|encouraged to apply|indeed'?s ai|help others)\b/i;
 
 /** Last-resort title, for when every DETAIL_TITLE_SELECTORS entry has gone stale (Indeed
- *  renames these freely): the first h1/h2 in the pane that is real text, isn't a section
- *  label, and isn't inside the description body. The title heading sits at the very top of
- *  the pane's header, above the "Job details"/"Profile insights" section headings. */
+ *  renames these freely): the first heading in the pane that is real text, isn't a section
+ *  label / metadata chip, and isn't inside the description body. Checked in two passes
+ *  rather than one h1-or-h2 pass: a real job title is overwhelmingly an h1 when Indeed
+ *  gives it a heading tag at all, while "Job type"/"Pay"/"Location" metadata chips are
+ *  h2/h3s that can otherwise appear earlier in DOM order than the title itself — so all
+ *  h1s are tried, in order, before any h2/h3 is considered at all. */
 function headingTitle(container: Element, description: Element | null): string | null {
-  for (const heading of Array.from(container.querySelectorAll("h1, h2"))) {
-    if (description && description.contains(heading)) continue;
-    const text = cleanTitle(textOf(heading));
-    if (text && text.length <= 200 && !NON_TITLE_HEADINGS.test(text)) return text;
+  for (const tags of ["h1", "h2, h3"]) {
+    for (const heading of Array.from(container.querySelectorAll(tags))) {
+      if (description && description.contains(heading)) continue;
+      const text = cleanTitle(textOf(heading));
+      if (text && text.length <= 200 && !NON_TITLE_HEADINGS.test(text)) return text;
+    }
   }
   return null;
 }
