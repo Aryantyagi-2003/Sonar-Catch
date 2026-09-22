@@ -73,6 +73,63 @@ export const INDEED_SPLIT_VIEW_STRUCTURAL_FALLBACK = `
 </html>
 `;
 
+// Indeed's new react-native-web-based detail pane, confirmed live 2026-09-22 — trimmed
+// from the real outerHTML the user copied out of their own browser's inspector for a real
+// posting (Rexel, "Web Project Coordinator", ca.indeed.com) and pasted in full, not
+// independently fetched (Cloudflare blocks headless Chrome from this environment). Keeps
+// every selector this fixture is meant to exercise (data-testid values, class names,
+// heading levels) faithful to that real DOM; drops styling, SVGs, and the "sticky compact
+// header" duplicate of the title/company (same content, would be redundant here).
+export const INDEED_REACT_NATIVE_LAYOUT = `
+<html>
+  <body>
+    <div id="mosaic-provider-jobcards">
+      <ul>
+        <li data-testid="slider_item">
+          <h2 class="jobTitle"><a>Warehouse Associate</a></h2>
+          <span data-testid="company-name">Different Co</span>
+        </li>
+      </ul>
+    </div>
+    <div data-testid="viewjob-main-content">
+      <div data-testid="desktop-job-header">
+        <div data-testid="company-info-title-row">
+          <h5 role="heading" aria-level="5" data-testid="vj-job-title">Web Project Coordinator</h5>
+        </div>
+        <div data-testid="company-info-metadata">
+          <a href="https://ca.indeed.com/cmp/Rexel" aria-label="Rexel (opens in a new tab)" target="_blank">Rexel</a>
+          <div>Mississauga, ON L5R 3G3</div>
+        </div>
+        <div>$50,000–$70,000 a year - Permanent, Full-time</div>
+      </div>
+      <div data-testid="jobDetailsSection">
+        <h4 role="heading" aria-level="4">Job details</h4>
+        <div aria-label="Pay" role="group">
+          <h2 role="heading" aria-level="2">Pay</h2>
+          <div>$50,000–$70,000 a year</div>
+        </div>
+        <div aria-label="Job type" role="group">
+          <h2 role="heading" aria-level="2">Job type</h2>
+          <div>Permanent</div>
+          <div>Full-time</div>
+        </div>
+      </div>
+      <h4 role="heading" aria-level="4" data-testid="vj-job-description-heading">Full job description</h4>
+      <div class="react-native-html-content simple-job-description-html">
+        <p><b>Join Rexel: A Global Leader in Electrical Distribution</b></p>
+        <p>We are looking for a proactive and detail-oriented Web Project Coordinator for our
+        Mississauga branch to support the quality, adoption, and continuous improvement of our
+        digital platforms, coordinating small web projects from discovery through UAT and
+        go-live while maintaining clear, user-focused documentation in Confluence for our
+        webshops and mobile apps across multiple regional banners and business units.</p>
+        <p>The anticipated annual base salary range for this position is CAD 50000- 70000.</p>
+      </div>
+      <button data-testid="vj-report-job">Report job</button>
+    </div>
+  </body>
+</html>
+`;
+
 export const INDEED_SPLIT_VIEW_LOADING = `
 <html>
   <body>

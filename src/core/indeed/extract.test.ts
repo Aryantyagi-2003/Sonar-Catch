@@ -6,6 +6,7 @@ import {
   INDEED_SPLIT_VIEW_STRUCTURAL_FALLBACK,
   INDEED_SPLIT_VIEW_LOADING,
   INDEED_SPLIT_VIEW_NO_JOB_SELECTED,
+  INDEED_REACT_NATIVE_LAYOUT,
 } from "@/core/indeed/fixtures";
 
 function parse(html: string): Document {
@@ -112,6 +113,47 @@ describe("extractIndeedJobPosting — loading and empty states", () => {
   it("reports 'not-found' on a page with no Indeed structure at all", () => {
     const result = extractIndeedJobPosting(parse("<html><body><p>Not Indeed</p></body></html>"), "https://example.com");
     expect(result.status).toBe("not-found");
+  });
+});
+
+describe("extractIndeedJobPosting — new react-native-web layout (confirmed live 2026-09-22)", () => {
+  // Regression: 0.1.6/0.1.7/0.1.8 all reported this posting wrong ("Unknown title", then a
+  // "Job type" chip heading mistaken for the title) because Indeed's ENTIRE detail pane was
+  // rebuilt on this new front end, not just the title element — none of the old
+  // `.jobsearch-*` selectors exist in it at all. Fixed with real testid-based selectors read
+  // directly from a real posting's DOM (see selectors.ts and fixtures.ts for provenance),
+  // not another heuristic guess.
+  const result = extractIndeedJobPosting(parse(INDEED_REACT_NATIVE_LAYOUT), "https://ca.indeed.com/viewjob?jk=f750ca1c17bd7894");
+
+  it("finds the real title via [data-testid=\"vj-job-title\"], not a section heading", () => {
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.title).toBe("Web Project Coordinator");
+  });
+
+  it("finds the company from the company-info-metadata link's visible text, not its aria-label", () => {
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.company).toBe("Rexel");
+  });
+
+  it("finds the description via its own semantic class, not the left-hand list", () => {
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.descriptionText).toContain("Web Project Coordinator for our");
+    expect(result.posting.descriptionText).not.toContain("Warehouse Associate");
+  });
+
+  it("still recovers a salary via the regex fallback, even with no salary selector for this layout", () => {
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.salary?.raw?.toLowerCase()).toContain("year");
+  });
+
+  it("uses [data-testid=\"viewjob-main-content\"] as the pane, not the structural fallback", () => {
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.posting.containerTier).toBe("selector");
   });
 });
 
