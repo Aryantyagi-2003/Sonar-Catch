@@ -3,8 +3,29 @@ import browser from "webextension-polyfill";
 import { submitJobPosting, confirmJobPosting, lookupExistingApplication, type ExistingApplicationMatch } from "@/core/sonar-client";
 import { composePostingText } from "@/core/compose-posting-text";
 import { canonicalCompanyName } from "@/core/canonical-company";
-import { getSonarSettings } from "@/adapters/webextension/storage";
+import { getSonarSettings, recordBackgroundDiagnostic } from "@/adapters/webextension/storage";
 import type { ExtractedJobPosting } from "@/core/types";
+
+// Written unconditionally at load, before anything else — the one signal that survives even
+// if everything below throws, and the thing to check first via the options page if sends
+// keep failing: an old/missing timestamp here means the background isn't starting at all
+// (manifest/script problem), not merely going idle between clicks. See storage.ts's
+// BackgroundDiagnostics doc comment for why this goes to storage rather than console.log.
+void recordBackgroundDiagnostic("scriptStartedAt");
+console.log("[Sonar Catch] background script started", new Date().toISOString());
+
+// A long-lived port from a content script keeps this background alive for as long as that
+// port stays connected — both Chrome's MV3 service worker and Firefox's non-persistent
+// event page reset their idle timer while one is open, which is the standard mitigation
+// for "the background went idle and dropped a one-off sendMessage call" (both platforms'
+// own extension docs recommend this). It's a mitigation, not an ironclad guarantee — Chrome
+// in particular still caps how long a service worker can stay alive regardless — so
+// messaging.ts's content-script side additionally retries a failed send once after a short
+// delay rather than depending on this alone.
+browser.runtime.onConnect.addListener((port) => {
+  if (port.name !== "sonar-catch-keepalive") return;
+  void recordBackgroundDiagnostic("lastPortConnectedAt");
+});
 
 type SendPostingMessage = { type: "SEND_POSTING"; posting: ExtractedJobPosting; dateApplied: string };
 type SendPostingResponse =
@@ -67,10 +88,26 @@ async function handleSendPosting(posting: ExtractedJobPosting, dateApplied: stri
 // portable way to send an async response — this works natively in Firefox and is what the
 // polyfill normalizes Chrome's sendResponse+"return true" callback pattern into, so the
 // same listener body runs unmodified on both.
+//
+// handleSendPosting's own promise is never allowed to reject past this point. Every one of
+// its calls (storage, fetch) already catches and returns an `{ ok: false, ... }` result, but
+// if something unforeseen still throws (a storage API error, a bug), letting that rejection
+// reach browser.runtime.sendMessage on the content-script side makes it indistinguishable
+// from "no background to receive this at all" — the content script's own catch collapses
+// both into the same generic "Couldn't reach the extension background" message, hiding a
+// real (and possibly fixable) error behind a connectivity-sounding one. Catching it here
+// instead surfaces the actual message in the widget, and logs it so it's visible from
+// about:debugging's/chrome://extensions's background inspector without needing to
+// reproduce the failure again.
 browser.runtime.onMessage.addListener((message: unknown) => {
   const msg = message as SendPostingMessage;
   if (msg?.type !== "SEND_POSTING") return undefined;
-  return handleSendPosting(msg.posting, msg.dateApplied);
+  void recordBackgroundDiagnostic("lastMessageReceivedAt");
+  return handleSendPosting(msg.posting, msg.dateApplied).catch((error: unknown) => {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error("[Sonar Catch] handleSendPosting failed unexpectedly:", error);
+    return { ok: false, error: `Unexpected extension error: ${reason}` } satisfies SendPostingResponse;
+  });
 });
 
 browser.action.onClicked.addListener(() => {

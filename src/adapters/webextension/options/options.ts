@@ -4,7 +4,9 @@ import {
   getSonarSettings,
   setSonarSettings,
   getAdapterHealth,
+  getBackgroundDiagnostics,
   type AdapterHealthRecord,
+  type BackgroundDiagnostics,
 } from "@/adapters/webextension/storage";
 import { ADAPTER_META } from "@/core/sites/registry";
 
@@ -13,6 +15,7 @@ const sonarUrlInput = document.getElementById("sonarUrl") as HTMLInputElement;
 const apiTokenInput = document.getElementById("apiToken") as HTMLInputElement;
 const status = document.getElementById("status") as HTMLSpanElement;
 const adapterHealthList = document.getElementById("adapter-health-list") as HTMLUListElement;
+const backgroundDiagnosticsList = document.getElementById("background-diagnostics-list") as HTMLUListElement;
 
 const HEALTH_LABELS: Record<AdapterHealthRecord["status"], string> = {
   dedicated: "Dedicated adapter",
@@ -66,6 +69,41 @@ async function renderAdapterHealth(): Promise<void> {
   }
 }
 
+const DIAGNOSTIC_LABELS: Record<keyof BackgroundDiagnostics, string> = {
+  scriptStartedAt: "Background script last started",
+  lastPortConnectedAt: "Last kept alive from a page",
+  lastMessageReceivedAt: "Last \"Send to Sonar\" click received",
+};
+
+function relativeOrNever(iso: string | null): string {
+  return iso ? `${relativeTime(iso)} (${new Date(iso).toLocaleString()})` : "never recorded";
+}
+
+async function renderBackgroundDiagnostics(): Promise<void> {
+  const diagnostics = await getBackgroundDiagnostics();
+  backgroundDiagnosticsList.replaceChildren();
+
+  for (const field of Object.keys(DIAGNOSTIC_LABELS) as (keyof BackgroundDiagnostics)[]) {
+    const item = document.createElement("li");
+    item.className = "adapter-row";
+
+    const badge = document.createElement("span");
+    badge.className = `adapter-badge adapter-badge--${diagnostics[field] ? "dedicated" : "failed"}`;
+    badge.textContent = diagnostics[field] ? "OK" : "Never";
+
+    const name = document.createElement("span");
+    name.className = "adapter-name";
+    name.textContent = DIAGNOSTIC_LABELS[field];
+
+    const detail = document.createElement("span");
+    detail.className = "adapter-detail";
+    detail.textContent = relativeOrNever(diagnostics[field]);
+
+    item.replaceChildren(badge, name, detail);
+    backgroundDiagnosticsList.appendChild(item);
+  }
+}
+
 async function loadExistingSettings(): Promise<void> {
   const settings = await getSonarSettings();
   if (settings) {
@@ -107,3 +145,8 @@ form.addEventListener("submit", async (event) => {
 
 loadExistingSettings();
 renderAdapterHealth();
+renderBackgroundDiagnostics();
+// Diagnostics reflect a rolling background/tab state, not something the user just changed
+// on this form — poll while the page is open so a value flips from "Never" to a real
+// timestamp without needing to close and reopen the options page to see it.
+setInterval(renderBackgroundDiagnostics, 3000);

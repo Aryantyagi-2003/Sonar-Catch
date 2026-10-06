@@ -43,6 +43,48 @@ export async function recordAdapterHealth(record: AdapterHealthRecord): Promise<
   await browser.storage.local.set({ [ADAPTER_HEALTH_KEY]: current });
 }
 
+// Diagnostics for the "Couldn't reach the extension background" failure mode, where the
+// background script (an MV3 Chrome service worker, or a Firefox non-persistent event page)
+// can go idle/unloaded between clicks. Firefox's about:debugging can fail to open an
+// inspector toolbox for a background context that isn't currently running at all, which
+// makes that background's own console log unreachable exactly when it would be most
+// useful — so these timestamps are written to storage instead, where they're readable from
+// the options page (an ordinary tab, always inspectable) regardless of whether the
+// background happens to be alive at that moment.
+export interface BackgroundDiagnostics {
+  /** Set at module load, every time the background script (re)starts. If this is old or
+   *  missing while postings are actively being detected, the background isn't starting at
+   *  all — a manifest/script problem, not an idle-timing one. */
+  scriptStartedAt: string | null;
+  /** Set whenever a content script's long-lived keep-alive port connects. */
+  lastPortConnectedAt: string | null;
+  /** Set the moment a SEND_POSTING message is received, before any processing — proves the
+   *  message reached a live listener, independent of whether handling it then succeeded. */
+  lastMessageReceivedAt: string | null;
+}
+
+const BACKGROUND_DIAGNOSTICS_KEY = "backgroundDiagnostics";
+
+export async function getBackgroundDiagnostics(): Promise<BackgroundDiagnostics> {
+  const result = await browser.storage.local.get(BACKGROUND_DIAGNOSTICS_KEY);
+  return (
+    (result[BACKGROUND_DIAGNOSTICS_KEY] as BackgroundDiagnostics | undefined) ?? {
+      scriptStartedAt: null,
+      lastPortConnectedAt: null,
+      lastMessageReceivedAt: null,
+    }
+  );
+}
+
+export async function recordBackgroundDiagnostic(
+  field: keyof BackgroundDiagnostics,
+  at: string = new Date().toISOString(),
+): Promise<void> {
+  const current = await getBackgroundDiagnostics();
+  current[field] = at;
+  await browser.storage.local.set({ [BACKGROUND_DIAGNOSTICS_KEY]: current });
+}
+
 export async function getSonarSettings(): Promise<SonarSettings | null> {
   const result = await browser.storage.local.get(STORAGE_KEY);
   const settings = result[STORAGE_KEY] as SonarSettings | undefined;

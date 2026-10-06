@@ -15,7 +15,13 @@ vi.mock("webextension-polyfill", () => ({
   },
 }));
 
-import { getAdapterHealth, recordAdapterHealth, type AdapterHealthRecord } from "@/adapters/webextension/storage";
+import {
+  getAdapterHealth,
+  recordAdapterHealth,
+  getBackgroundDiagnostics,
+  recordBackgroundDiagnostic,
+  type AdapterHealthRecord,
+} from "@/adapters/webextension/storage";
 
 const rec = (over: Partial<AdapterHealthRecord>): AdapterHealthRecord => ({
   adapterId: "cibc",
@@ -51,5 +57,39 @@ describe("adapter health storage — the data the options table renders", () => 
   it("records an honest 'failed' row when nothing was detected", async () => {
     await recordAdapterHealth(rec({ adapterId: "walmart", adapterLabel: "Walmart", status: "failed", method: null, sampleTitle: null }));
     expect((await getAdapterHealth()).walmart).toMatchObject({ status: "failed", method: null });
+  });
+});
+
+describe("background diagnostics — surfaced on the options page when the background can't be inspected live", () => {
+  beforeEach(() => {
+    for (const k of Object.keys(store)) delete store[k];
+  });
+
+  it("starts with every field unset", async () => {
+    expect(await getBackgroundDiagnostics()).toEqual({
+      scriptStartedAt: null,
+      lastPortConnectedAt: null,
+      lastMessageReceivedAt: null,
+    });
+  });
+
+  it("records one field at a time without clobbering the others", async () => {
+    await recordBackgroundDiagnostic("scriptStartedAt", "2026-09-22T00:00:00.000Z");
+    await recordBackgroundDiagnostic("lastMessageReceivedAt", "2026-09-22T00:05:00.000Z");
+
+    expect(await getBackgroundDiagnostics()).toEqual({
+      scriptStartedAt: "2026-09-22T00:00:00.000Z",
+      lastPortConnectedAt: null,
+      lastMessageReceivedAt: "2026-09-22T00:05:00.000Z",
+    });
+  });
+
+  it("defaults the timestamp to now when none is given", async () => {
+    const before = Date.now();
+    await recordBackgroundDiagnostic("lastPortConnectedAt");
+    const recorded = new Date((await getBackgroundDiagnostics()).lastPortConnectedAt!).getTime();
+
+    expect(recorded).toBeGreaterThanOrEqual(before);
+    expect(recorded).toBeLessThanOrEqual(Date.now());
   });
 });

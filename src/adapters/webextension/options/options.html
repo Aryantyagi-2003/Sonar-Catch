@@ -36,6 +36,16 @@
         </p>
         <ul id="adapter-health-list"></ul>
       </section>
+
+      <section id="background-diagnostics">
+        <h2>Background script</h2>
+        <p class="subtitle">
+          If "Send to Sonar" reports it can't reach the extension, check here first — it
+          reads storage the background script itself writes to, so it works even if the
+          background isn't currently running for your browser's own inspector to attach to.
+        </p>
+        <ul id="background-diagnostics-list"></ul>
+      </section>
     </main>
     <script type="module" src="options.ts"></script>
   </body>

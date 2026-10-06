@@ -1,11 +1,9 @@
-import browser from "webextension-polyfill";
-
 import { extractIndeedJobPosting } from "@/core/indeed/extract";
 import { DETAIL_PANE_SELECTORS, SKELETON_CLASS, SKELETON_TEST_ID } from "@/core/indeed/selectors";
 import type { ExtractedJobPosting } from "@/core/types";
-import type { ExistingApplicationMatch } from "@/core/sonar-client";
 import { renderWidget, setSendHandler, type WidgetState } from "@/adapters/webextension/ui";
 import { startSiteAdapters } from "@/adapters/webextension/sites-content";
+import { keepBackgroundAlive, sendPostingToBackground } from "@/adapters/webextension/messaging";
 // ui.css is injected via manifest.json's content_scripts.css, not imported here — that's
 // the standard MV3 mechanism and avoids CSP issues with injecting <style> via JS.
 
@@ -111,22 +109,7 @@ async function handleSendClick(): Promise<void> {
   // runExtraction's changed-detection branch — shouldn't happen since currentPosting is
   // only ever set there, but keeps this from sending an empty dateApplied.
   const dateApplied = currentPostingDetectedAt ?? new Date().toISOString();
-
-  type SendPostingResponse =
-    | { ok: true; applicationId: string }
-    | { ok: false; error: string }
-    | { ok: false; duplicate: true; match: ExistingApplicationMatch; existingUrl: string };
-
-  let response: SendPostingResponse | undefined;
-  try {
-    response = (await browser.runtime.sendMessage({
-      type: "SEND_POSTING",
-      posting: currentPosting,
-      dateApplied,
-    })) as SendPostingResponse | undefined;
-  } catch {
-    response = undefined;
-  }
+  const response = await sendPostingToBackground(currentPosting, dateApplied);
 
   if (!response) {
     renderWidget({ kind: "error", message: "Couldn't reach the extension background — try again." });
@@ -146,6 +129,8 @@ async function handleSendClick(): Promise<void> {
     if (currentPosting) renderWidget({ kind: "detected", posting: currentPosting });
   }, 2500);
 }
+
+keepBackgroundAlive();
 
 if (isIndeedHost(window.location.hostname)) {
   setSendHandler(handleSendClick);

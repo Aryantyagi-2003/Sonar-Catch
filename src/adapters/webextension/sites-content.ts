@@ -1,11 +1,9 @@
-import browser from "webextension-polyfill";
-
 import { adapterFor, healthStatusForMethod, type SiteAdapter } from "@/core/sites/registry";
 import type { ExtractedJobPosting, ExtractionResult } from "@/core/types";
-import type { ExistingApplicationMatch } from "@/core/sonar-client";
 import { renderWidget, setSendHandler, type WidgetState } from "@/adapters/webextension/ui";
 import { recordAdapterHealth } from "@/adapters/webextension/storage";
 import { extractFromRemote } from "@/adapters/webextension/remote-posting";
+import { sendPostingToBackground } from "@/adapters/webextension/messaging";
 
 // The non-Indeed detection loop. Shares the widget and the background SEND_POSTING message
 // (so the send/lookup/duplicate flow is byte-for-byte the same as Indeed's) but does its
@@ -101,22 +99,7 @@ async function handleSendClick(): Promise<void> {
   renderWidget({ kind: "sending" });
 
   const dateApplied = currentPostingDetectedAt ?? new Date().toISOString();
-
-  type SendPostingResponse =
-    | { ok: true; applicationId: string }
-    | { ok: false; error: string }
-    | { ok: false; duplicate: true; match: ExistingApplicationMatch; existingUrl: string };
-
-  let response: SendPostingResponse | undefined;
-  try {
-    response = (await browser.runtime.sendMessage({
-      type: "SEND_POSTING",
-      posting: currentPosting,
-      dateApplied,
-    })) as SendPostingResponse | undefined;
-  } catch {
-    response = undefined;
-  }
+  const response = await sendPostingToBackground(currentPosting, dateApplied);
 
   if (!response) {
     renderWidget({ kind: "error", message: "Couldn't reach the extension background — try again." });

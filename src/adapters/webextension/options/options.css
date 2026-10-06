@@ -79,22 +79,26 @@ button:hover {
   color: #b3261e;
 }
 
-#adapter-health {
+#adapter-health,
+#background-diagnostics {
   margin-top: 32px;
   border-top: 1px solid #e0e0e6;
   padding-top: 20px;
 }
 
-#adapter-health h2 {
+#adapter-health h2,
+#background-diagnostics h2 {
   font-size: 15px;
   margin: 0 0 4px;
 }
 
-#adapter-health .subtitle {
+#adapter-health .subtitle,
+#background-diagnostics .subtitle {
   margin-bottom: 16px;
 }
 
-#adapter-health-list {
+#adapter-health-list,
+#background-diagnostics-list {
   list-style: none;
   margin: 0;
   padding: 0;
