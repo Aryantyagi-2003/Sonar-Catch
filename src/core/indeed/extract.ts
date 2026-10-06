@@ -119,7 +119,7 @@ function matchSalaryText(text: string): string | null {
   return match ? match[0].trim() : null;
 }
 
-export function extractIndeedJobPosting(doc: Document, sourceUrl: string): ExtractionResult {
+export function extractIndeedJobPosting(doc: Document, sourceUrl: string | null): ExtractionResult {
   const container = findDetailPaneContainer(doc);
   if (!container) return { status: "not-found" };
 

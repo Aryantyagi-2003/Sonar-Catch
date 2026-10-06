@@ -75,13 +75,16 @@ export async function lookupExistingApplication(
   fetchImpl: typeof fetch = fetch,
 ): Promise<LookupResult> {
   try {
+    // /api/ingest/lookup's schema has sourceUrl as optional but not nullable — sending
+    // `null` would 400 and silently skip the duplicate check, so omit the key instead.
+    const { sourceUrl, ...rest } = payload;
     const response = await fetchImpl(`${normalizeBaseUrl(sonarUrl)}/api/ingest/lookup`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiToken}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(sourceUrl ? { ...rest, sourceUrl } : rest),
     });
 
     const body = await response.json().catch(() => null);

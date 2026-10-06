@@ -1,4 +1,5 @@
 import { extractIndeedJobPosting } from "@/core/indeed/extract";
+import { canonicalIndeedJobUrl } from "@/core/indeed/url";
 import { DETAIL_PANE_SELECTORS, SKELETON_CLASS, SKELETON_TEST_ID } from "@/core/indeed/selectors";
 import type { ExtractedJobPosting } from "@/core/types";
 import { renderWidget, setSendHandler, type WidgetState } from "@/adapters/webextension/ui";
@@ -33,7 +34,7 @@ function findObserveTarget(): Node {
 }
 
 function runExtraction(): void {
-  const result = extractIndeedJobPosting(document, window.location.href);
+  const result = extractIndeedJobPosting(document, canonicalIndeedJobUrl(window.location.href));
 
   if (result.status === "loading") {
     // Mid-transition — don't flicker to "not found" between two valid postings.

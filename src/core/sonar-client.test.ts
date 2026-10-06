@@ -120,6 +120,20 @@ describe("lookupExistingApplication", () => {
     expect(result).toEqual({ ok: true, match: null });
   });
 
+  it("omits a null sourceUrl, since Sonar's lookup schema rejects null", async () => {
+    const fetchImpl = fakeFetch(200, { status: "success", match: null });
+    await lookupExistingApplication(
+      "https://sonar.example.com",
+      "tok",
+      { company: "Acme", role: "Engineer", sourceUrl: null },
+      fetchImpl,
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://sonar.example.com/api/ingest/lookup",
+      expect.objectContaining({ body: JSON.stringify({ company: "Acme", role: "Engineer" }) }),
+    );
+  });
+
   it("returns a network-failure error without throwing when fetch rejects", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error("network down")) as unknown as typeof fetch;
     const result = await lookupExistingApplication(

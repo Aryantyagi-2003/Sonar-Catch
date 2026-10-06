@@ -30,7 +30,10 @@ export interface ExtractedJobPosting {
   location: string | null;
   salary: ExtractedPayRange | null;
   descriptionText: string;
-  sourceUrl: string;
+  /** Null when the page doesn't identify one specific job (e.g. Indeed's homepage feed) —
+   *  a list-page URL shared by many jobs would make Sonar's URL-based duplicate check
+   *  match the wrong application. */
+  sourceUrl: string | null;
   /** Indeed only: how the detail-pane container itself was located — surfaced in the
    *  UI/logs so a structural-fallback extraction (more likely to be wrong) never looks
    *  identical to a clean selector match. Non-Indeed adapters set `detection` instead. */
